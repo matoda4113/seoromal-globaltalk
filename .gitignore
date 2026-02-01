@@ -37,6 +37,3 @@ next-env.d.ts
 .idea
 .vscode
 .claude
-
-# fly.io
-.dockerignore
