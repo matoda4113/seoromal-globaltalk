@@ -1,4 +1,4 @@
-export const locales = ['ko', 'ja'] as const;
+export const locales = ['ko', 'en', 'ja'] as const;
 export type Locale = typeof locales[number];
 
 export const translations = {
@@ -114,8 +114,64 @@ export const translations = {
       rights: 'All Rights Reserved',
     },
   },
+  en: {
+    hero: {
+      title: 'Talk Together, Learn Together',
+      subtitle: 'Global Language Exchange Platform',
+      description: 'A space where people who want to learn languages teach and learn from each other.',
+      cta: 'Get Started',
+      login: 'Login',
+    },
+    features: {
+      title: 'Why SeRoMal?',
+      free: {
+        title: 'Free Language Exchange',
+        description: 'Chat with native speakers at no cost using our acorn point system',
+      },
+      native: {
+        title: 'Direct Native Connection',
+        description: 'Learn living languages through 1:1 conversations with real native speakers',
+      },
+      realtime: {
+        title: 'Real-time Conversations',
+        description: 'Improve your speaking skills through voice or video calls',
+      },
+      fair: {
+        title: 'Fair System',
+        description: 'Mutual benefit structure where hosts earn acorns and guests use them',
+      },
+    },
+    howItWorks: {
+      title: 'How It Works',
+      host: {
+        title: 'Join as Host',
+        step1: 'Create a room',
+        step2: 'Wait for guests',
+        step3: 'Chat and earn acorns',
+      },
+      guest: {
+        title: 'Join as Guest',
+        step1: 'Find a room',
+        step2: 'Enter (1 acorn required)',
+        step3: 'Chat and leave a review',
+      },
+    },
+    acorn: {
+      title: 'Acorn System',
+      description: 'SeRoMal enables fair language exchange with acorn points',
+      signup: '50 on signup',
+      free: '10 free every 4 hours',
+      host: '1 per minute as host',
+      review: '1 for writing reviews',
+      fiveStar: '3 for receiving ⭐⭐⭐⭐⭐',
+    },
+    footer: {
+      slogan: 'Talk Together, Learn Together',
+      rights: 'All Rights Reserved',
+    },
+  },
 };
 
 export function getTranslations(locale: Locale) {
-  return translations[locale] || translations.ko;
+  return translations[locale] || translations.en;
 }
