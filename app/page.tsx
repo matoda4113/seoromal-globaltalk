@@ -11,7 +11,7 @@ export default function Home() {
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
       {/* Header */}
       <header className="container mx-auto px-4 py-6 flex justify-between items-center">
-        <div className="text-2xl font-bold text-blue-600">서로말 SeRoMalee47878</div>
+        <div className="text-2xl font-bold text-blue-600">서로말 SeRoMal</div>
         <div className="flex items-center gap-4">
           <button
             onClick={() => setLocale('ko')}
