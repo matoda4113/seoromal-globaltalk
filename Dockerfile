@@ -12,6 +12,9 @@ FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# Ensure public directory exists
+RUN mkdir -p public
+
 # Next.js build
 RUN npm run build
 
