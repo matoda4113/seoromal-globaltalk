@@ -11,7 +11,7 @@ export default function Home() {
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
       {/* Header - 모바일 최적화 */}
       <header className="px-4 py-3 flex justify-between items-center border-b border-gray-200 bg-white sticky top-0 z-50">
-        <div className="text-lg sm:text-xl font-bold text-blue-600">SeRoMal</div>
+        <div className="text-lg sm:text-xl font-bold text-blue-600">서로말</div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setLocale('ko')}
@@ -45,7 +45,12 @@ export default function Home() {
         <p className="text-sm sm:text-base text-gray-500 mb-6 max-w-md mx-auto">
           {t.hero.description}
         </p>
-        <button className="bg-blue-600 text-white px-8 py-3 rounded-full text-base font-semibold hover:bg-blue-700 transition-colors shadow-lg active:scale-95 min-h-[48px]">
+        <button
+          onClick={() => {
+            window.location.href = `/app?lang=${locale}`;
+          }}
+          className="bg-blue-600 text-white px-8 py-3 rounded-full text-base font-semibold hover:bg-blue-700 transition-colors shadow-lg active:scale-95 min-h-[48px]"
+        >
           {t.hero.cta}
         </button>
         <div className="mt-4">
@@ -171,7 +176,12 @@ export default function Home() {
           <h2 className="text-2xl sm:text-3xl font-bold mb-4">
             {t.hero.title}
           </h2>
-          <button className="bg-white text-blue-600 px-8 py-3 rounded-full text-base font-semibold hover:bg-gray-100 transition-colors shadow-lg active:scale-95 min-h-[48px]">
+          <button
+            onClick={() => {
+              window.location.href = `/app?lang=${locale}`;
+            }}
+            className="bg-white text-blue-600 px-8 py-3 rounded-full text-base font-semibold hover:bg-gray-100 transition-colors shadow-lg active:scale-95 min-h-[48px]"
+          >
             {t.hero.cta}
           </button>
         </div>
@@ -180,10 +190,10 @@ export default function Home() {
       {/* Footer - 모바일 최적화 */}
       <footer className="bg-gray-900 text-white px-4 py-8">
         <div className="max-w-md mx-auto text-center">
-          <div className="text-lg font-bold mb-2">SeRoMal</div>
+          <div className="text-lg font-bold mb-2">서로말</div>
           <p className="text-gray-400 text-sm mb-4">{t.footer.slogan}</p>
           <p className="text-gray-500 text-xs">
-            © 2025 SeRoMal. {t.footer.rights}
+            © 2026 서로말. {t.footer.rights}
           </p>
         </div>
       </footer>

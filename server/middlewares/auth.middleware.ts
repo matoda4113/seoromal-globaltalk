@@ -1,22 +1,48 @@
 import { Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 export interface AuthRequest extends Request {
   user?: {
     id: number;
     email: string;
   };
+  userId?: number;
 }
 
-// 인증 미들웨어 (추후 구현)
+/**
+ * JWT 인증 미들웨어
+ * Cookie에서 accessToken을 읽어서 검증
+ */
 export const authenticate = async (
   req: AuthRequest,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    // TODO: JWT 토큰 검증 로직 추가
+    const token = req.cookies.accessToken;
+
+    if (!token) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    // JWT 검증
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: number };
+
+    // req에 userId 추가
+    (req as any).userId = decoded.userId;
+
     next();
   } catch (error) {
-    res.status(401).json({ error: '인증이 필요합니다' });
+    if (error instanceof jwt.TokenExpiredError) {
+      // 토큰 만료 시 403 반환 (프론트엔드에서 refresh 시도)
+      return res.status(403).json({ message: 'Token expired', error: 'TOKEN_EXPIRED' });
+    }
+    if (error instanceof jwt.JsonWebTokenError) {
+      // 유효하지 않은 토큰
+      return res.status(401).json({ message: 'Invalid token', error: 'INVALID_TOKEN' });
+    }
+    return res.status(401).json({ message: 'Authentication failed' });
   }
 };

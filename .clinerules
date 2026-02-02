@@ -1,0 +1,28 @@
+# 서로말(SeRoMal) 프로젝트 규칙
+
+## 데이터베이스 접근 규칙
+
+### Supabase 접근 방식
+- **모든 Supabase 데이터베이스 접근은 Connection Pool 방식을 사용한다**
+- Supabase 클라이언트 SDK는 사용하지 않는다
+- `DATABASE_URL` 환경변수를 사용하여 PostgreSQL에 직접 연결한다
+- Connection pooler를 통해 효율적인 연결 관리를 수행한다
+
+```typescript
+// ❌ 잘못된 방식 (Supabase SDK 사용)
+import { supabase } from '../lib/db';
+const { data } = await supabase.from('users').select('*');
+
+// ✅ 올바른 방식 (Connection Pool 사용)
+import { pool } from '../lib/db';
+const result = await pool.query('SELECT * FROM users');
+```
+
+## Git 규칙
+- **절대로 자동으로 커밋이나 푸시를 하지 않는다**
+- 모든 Git 작업은 사용자의 명시적인 요청이 있을 때만 수행한다
+
+## 코드 스타일
+- TypeScript 사용
+- 한글로 대화
+- 이모지는 사용자 요청 시에만 사용
