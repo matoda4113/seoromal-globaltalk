@@ -84,14 +84,13 @@ export interface User {
   email: string;
   name?: string;
   nickname?: string;
+  bio?: string | null;
   provider: string;
-  points: number;
   age_group?: number | null;
   gender?: string | null;
-  created_at: string;
-  rating_avg?: number;
-  rating_count?: number;
   degree?: number;
+  points?: number;
+  created_at: string;
 }
 
 export interface SocialLoginResponse {
@@ -102,11 +101,13 @@ export interface SocialLoginResponse {
       email: string;
       name?: string;
       nickname?: string;
+      bio?: string | null;
       provider: string;
-      points: number;
       age_group?: number | null;
       gender?: string | null;
       country?: string | null;
+      degree?: number;
+      points?: number;
     };
   };
   status?: number; // HTTP 상태 코드 (201: 신규가입, 200: 기존 로그인)
@@ -120,9 +121,10 @@ export interface EmailRegisterResponse {
       email: string;
       nickname: string;
       provider: string;
-      points: number;
       age_group?: number | null;
       gender?: string | null;
+      degree?: number;
+      points?: number;
     };
   };
   status?: number; // HTTP 상태 코드 (201: 신규가입)
@@ -136,9 +138,10 @@ export interface EmailLoginResponse {
       email: string;
       nickname?: string;
       provider: string;
-      points: number;
       age_group?: number | null;
       gender?: string | null;
+      degree?: number;
+      points?: number;
     };
   };
   status?: number; // HTTP 상태 코드 (201: 신규가입, 200: 기존 로그인)
@@ -268,9 +271,10 @@ class AuthService {
   /**
    * 닉네임 변경
    */
-  async updateNickname(nickname: string): Promise<User> {
+  async updateNickname(nickname?: string, bio?: string): Promise<User> {
     const response = await apiClient.put<{ user: User }>('/auth/update-nickname', {
       nickname,
+      bio,
     });
     return response.data.user;
   }

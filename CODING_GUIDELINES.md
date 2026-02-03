@@ -169,6 +169,14 @@ create index IF not exists idx_call_history_guest_created on public.call_history
 - 트랜잭션이 필요한 작업은 반드시 `BEGIN` ~ `COMMIT` 사용
 - 에러 발생 시 `ROLLBACK` 처리
 
+### DB 타입 규칙 (필수)
+- **ID 컬럼**: `SERIAL` (자동 증가하는 int4)
+- **텍스트 컬럼**: `TEXT` 사용 (VARCHAR 사용 금지)
+- **시간 컬럼**: `TIMESTAMPTZ` (timestamp with time zone)
+  - 생성일: `created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP`
+  - 수정일: `updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP`
+- **외래키**: `INTEGER` + `REFERENCES` + `ON DELETE CASCADE`
+
 ## 3. 프론트엔드 ↔ 백엔드 통신
 
 ### 필수 규칙

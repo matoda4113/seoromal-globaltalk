@@ -9,9 +9,12 @@ interface User {
   email: string;
   name?: string;
   nickname?: string;
+  bio?: string | null;
   provider: string;
   age_group?: number | null;
   gender?: string | null;
+  degree?: number;
+  points?: number;
 }
 
 interface AuthContextType {

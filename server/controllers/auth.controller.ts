@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import axios from 'axios';
 import logger from "@/lib/logger";
+import { getUserPoints, addPoints } from '../lib/points';
 
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
@@ -112,7 +113,13 @@ export async function socialLogin(req: Request, res: Response) {
         userInfo.socialId,
       ]);
       user = result.rows[0];
+
+      // 신규 가입자에게 50포인트 지급
+      await addPoints(pool, user.id, 50, 'earn', '회원가입 축하 포인트', 'signup');
     }
+
+    // 사용자 포인트 조회
+    const userPoints = await getUserPoints(pool, user.id);
 
     // JWT 토큰 생성 (Access + Refresh)
     const accessToken = generateAccessToken(user.id);
@@ -147,9 +154,12 @@ export async function socialLogin(req: Request, res: Response) {
           email: user.email,
           name: user.name,
           nickname: user.nickname,
+          bio: user.bio,
           provider: user.provider,
           age_group: user.age_group,
           gender: user.gender,
+          degree: user.degree,
+          points: userPoints,
         },
       },
     });
@@ -205,6 +215,12 @@ export async function emailRegister(req: Request, res: Response) {
     const result = await client.query(insertQuery, [email, hashedPassword, nickname]);
     const user = result.rows[0];
 
+    // 신규 가입자에게 50포인트 지급
+    await addPoints(pool, user.id, 50, 'earn', '회원가입 축하 포인트', 'signup');
+
+    // 사용자 포인트 조회
+    const userPoints = await getUserPoints(pool, user.id);
+
     // JWT 토큰 생성 (Access + Refresh)
     const accessToken = generateAccessToken(user.id);
     const refreshToken = generateRefreshToken(user.id);
@@ -239,6 +255,8 @@ export async function emailRegister(req: Request, res: Response) {
           provider: user.provider,
           age_group: user.age_group,
           gender: user.gender,
+          degree: user.degree,
+          points: userPoints,
         },
       },
     });
@@ -287,6 +305,9 @@ export async function emailLogin(req: Request, res: Response) {
       });
     }
 
+    // 사용자 포인트 조회
+    const userPoints = await getUserPoints(pool, user.id);
+
     // JWT 토큰 생성 (Access + Refresh)
     const accessToken = generateAccessToken(user.id);
     const refreshToken = generateRefreshToken(user.id);
@@ -321,6 +342,8 @@ export async function emailLogin(req: Request, res: Response) {
           provider: user.provider,
           age_group: user.age_group,
           gender: user.gender,
+          degree: user.degree,
+          points: userPoints,
         },
       },
     });
@@ -401,6 +424,9 @@ export async function getCurrentUser(req: Request, res: Response) {
       });
     }
 
+    // 사용자 포인트 조회
+    const userPoints = await getUserPoints(pool, user.id);
+
     return res.json({
       message: 'User retrieved successfully',
       data: {
@@ -409,9 +435,12 @@ export async function getCurrentUser(req: Request, res: Response) {
           email: user.email,
           name: user.name,
           nickname: user.nickname,
+          bio: user.bio,
           provider: user.provider,
           age_group: user.age_group,
           gender: user.gender,
+          degree: user.degree,
+          points: userPoints,
         },
       },
     });
@@ -444,21 +473,42 @@ export async function updateNickname(req: Request, res: Response) {
 
   try {
     const userId = (req as any).userId;
-    const { nickname } = req.body;
+    const { nickname, bio } = req.body;
 
-    if (!nickname) {
+    // 최소한 하나의 필드는 있어야 함
+    if (!nickname && bio === undefined) {
       return res.status(400).json({
-        message: 'Nickname is required',
+        message: 'Nickname or bio is required',
       });
     }
 
+    // 동적으로 쿼리 생성
+    const updates: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    if (nickname) {
+      updates.push(`nickname = $${paramIndex}`);
+      values.push(nickname);
+      paramIndex++;
+    }
+
+    if (bio !== undefined) {
+      updates.push(`bio = $${paramIndex}`);
+      values.push(bio);
+      paramIndex++;
+    }
+
+    values.push(userId);
+
     const query = `
       UPDATE users
-      SET nickname = $1
-      WHERE id = $2
+      SET ${updates.join(', ')}
+      WHERE id = $${paramIndex}
       RETURNING *
     `;
-    const result = await client.query(query, [nickname, userId]);
+
+    const result = await client.query(query, values);
     const user = result.rows[0];
 
     return res.json({
@@ -467,14 +517,16 @@ export async function updateNickname(req: Request, res: Response) {
         email: user.email,
         name: user.name,
         nickname: user.nickname,
+        bio: user.bio,
         provider: user.provider,
         age_group: user.age_group,
         gender: user.gender,
+        degree: user.degree,
         created_at: user.created_at,
       },
     });
   } catch (error) {
-    logger.error('Update nickname error:', error);
+    logger.error('Update profile error:', error);
     return res.status(500).json({
       message: 'Internal server error',
     });
@@ -543,6 +595,7 @@ export async function updateProfile(req: Request, res: Response) {
           age_group: user.age_group,
           gender: user.gender,
           country: user.country,
+          degree: user.degree,
         },
       },
     });
