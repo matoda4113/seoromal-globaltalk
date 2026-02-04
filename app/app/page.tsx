@@ -8,6 +8,7 @@ import BottomNav from '@/components/BottomNav';
 import BottomSheet from '@/components/BottomSheet';
 import { useSocket, type Room } from '@/hooks/useSocket';
 import OnlineUsersModal from '@/components/OnlineUsersModal';
+import CreateRoomModal from '@/components/CreateRoomModal';
 
 export default function AppPage() {
   const searchParams = useSearchParams();
@@ -17,9 +18,10 @@ export default function AppPage() {
   const [isLanguageSheetOpen, setIsLanguageSheetOpen] = useState(false);
   const [isTopicSheetOpen, setIsTopicSheetOpen] = useState(false);
   const [isOnlineUsersModalOpen, setIsOnlineUsersModalOpen] = useState(false);
+  const [isCreateRoomModalOpen, setIsCreateRoomModalOpen] = useState(false);
 
   // Socket 연결 및 방 목록 가져오기
-  const { rooms, isConnected, onlineCount } = useSocket();
+  const { rooms, isConnected, onlineCount, createRoom } = useSocket();
 
   useEffect(() => {
     const langParam = searchParams.get('lang');
@@ -46,6 +48,33 @@ export default function AppPage() {
     const url = new URL(window.location.href);
     url.searchParams.set('lang', newLocale);
     window.history.pushState({}, '', url);
+  };
+
+  const handleCreateRoom = (roomData: {
+    title: string;
+    topic: string;
+    roomType: 'voice' | 'video';
+    maxParticipants: number;
+    isPrivate: boolean;
+    password?: string;
+  }) => {
+    // 사용자의 locale을 language로 매핑
+    const languageMap: { [key: string]: string } = {
+      ko: 'korean',
+      en: 'english',
+      ja: 'japanese',
+    };
+
+    createRoom({
+      title: roomData.title,
+      language: languageMap[locale] || 'english',
+      topic: roomData.topic,
+      roomType: roomData.roomType,
+      isPrivate: roomData.isPrivate,
+      password: roomData.password,
+    });
+
+    setIsCreateRoomModalOpen(false);
   };
 
   return (
@@ -98,7 +127,10 @@ export default function AppPage() {
               <span>{onlineCount.total}</span>
             </button>
           </div>
-          <button className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors shadow-md active:scale-95 min-h-[44px]">
+          <button
+            onClick={() => setIsCreateRoomModalOpen(true)}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors shadow-md active:scale-95 min-h-[44px]"
+          >
             {t.app.createRoom}
           </button>
         </div>
@@ -283,6 +315,14 @@ export default function AppPage() {
         anonymousCount={onlineCount.anonymous || 0}
         locale={locale}
       />
+
+      {/* Create Room Modal */}
+      <CreateRoomModal
+        isOpen={isCreateRoomModalOpen}
+        onClose={() => setIsCreateRoomModalOpen(false)}
+        onCreate={handleCreateRoom}
+        locale={locale}
+      />
     </div>
   );
 }
@@ -331,14 +371,42 @@ function RoomCard({
   return (
     <div className="bg-white p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow border border-gray-200">
       {/* Room Title */}
-      <h3 className="text-base font-bold text-gray-900 mb-2 line-clamp-1">
-        {room.title}
-      </h3>
+      <div className="flex items-center gap-2 mb-2">
+        <h3 className="text-base font-bold text-gray-900 line-clamp-1 flex-1">
+          {room.title}
+        </h3>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {/* Call Type Icon */}
+          {room.callType === 'audio' ? (
+            <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
+            </svg>
+          ) : (
+            <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+            </svg>
+          )}
+          {/* Lock Icon */}
+          {room.isPrivate && (
+            <svg className="w-5 h-5 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+            </svg>
+          )}
+        </div>
+      </div>
 
       {/* Host Info */}
       <div className="flex items-center gap-2 mb-3">
-        <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white text-sm font-bold">
-          {room.hostNickname[0].toUpperCase()}
+        <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white text-sm font-bold overflow-hidden">
+          {room.hostProfileImage ? (
+            <img
+              src={room.hostProfileImage}
+              alt={room.hostNickname}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            room.hostNickname[0].toUpperCase()
+          )}
         </div>
         <div>
           <p className="text-xs text-gray-500">Host</p>

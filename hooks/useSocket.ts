@@ -14,10 +14,13 @@ export interface Room {
   title: string;
   hostId: number;
   hostNickname: string;
+  hostProfileImage?: string | null;
   language: string; // korean, english, japanese
   topic: string; // free, romance, hobby, business, travel
   callType: 'audio' | 'video';
   maxParticipants: number;
+  isPrivate: boolean;
+  password?: string;
   participants: Participant[];
   createdAt: string;
   sessionStartedAt?: string;
@@ -26,6 +29,7 @@ export interface Room {
 interface AuthenticatedUser {
   userId: number;
   nickname: string;
+  profile_image_url?: string | null;
   age_group?: number | null;
   gender?: string | null;
 }
@@ -186,7 +190,9 @@ export function useSocket() {
     title: string;
     language: string;
     topic: string;
-    callType: 'audio' | 'video';
+    roomType: 'voice' | 'video';
+    isPrivate: boolean;
+    password?: string;
   }) => {
     const socket = getSocket();
     logger.info('Creating room:', data);

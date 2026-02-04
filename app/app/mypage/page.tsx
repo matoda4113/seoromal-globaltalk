@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { getTranslations, type Locale } from '@/lib/i18n';
 import { resolveLocale, setStoredLocale } from '@/lib/locale-storage';
@@ -9,6 +9,7 @@ import BottomNav from '@/components/BottomNav';
 import { useAuth } from '@/contexts/AuthContext';
 import authService from '@/services/auth.service';
 import logger from '@/lib/logger';
+import imageCompression from 'browser-image-compression';
 
 const translations = {
   ko: {
@@ -109,6 +110,8 @@ export default function MyPage() {
   const [ageGroup, setAgeGroup] = useState<number | null>(null);
   const [gender, setGender] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const langParam = searchParams.get('lang');
@@ -201,6 +204,43 @@ export default function MyPage() {
       alert(myPageT.updateFailed);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsUploadingImage(true);
+
+      // 이미지 압축 및 webp 변환 옵션
+      const options = {
+        maxWidthOrHeight: 1024, // 가로 또는 세로 최대 1024px
+        useWebWorker: true,
+        fileType: 'image/webp' as const,
+      };
+
+      logger.info('Compressing image...');
+      const compressedFile = await imageCompression(file, options);
+      logger.info('Image compressed:', { originalSize: file.size, compressedSize: compressedFile.size });
+
+      // 백엔드에 업로드
+      const { imageUrl, user: updatedUser } = await authService.uploadProfileImage(compressedFile);
+      logger.info('Profile image uploaded:', imageUrl);
+
+      // 사용자 정보 새로고침
+      await refreshUser();
+      alert(myPageT.updateSuccess);
+    } catch (error) {
+      logger.error('Failed to upload profile image:', error);
+      alert(myPageT.updateFailed);
+    } finally {
+      setIsUploadingImage(false);
+      // 파일 입력 초기화
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -300,8 +340,39 @@ export default function MyPage() {
         {/* 프로필 헤더 카드 */}
         <div className="bg-gradient-to-br from-blue-500 to-purple-600 rounded-3xl shadow-xl p-6 mb-6 text-white">
           <div className="flex items-center gap-4 mb-4">
-            <div className="w-20 h-20 bg-white/20 backdrop-blur-lg rounded-full flex items-center justify-center text-white text-3xl font-bold ring-4 ring-white/30">
-              {user?.nickname?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || '?'}
+            <div className="relative">
+              <div className="w-20 h-20 bg-white/20 backdrop-blur-lg rounded-full flex items-center justify-center text-white text-3xl font-bold ring-4 ring-white/30 overflow-hidden">
+                {user?.profile_image_url ? (
+                  <img
+                    src={user.profile_image_url}
+                    alt="Profile"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  user?.nickname?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || '?'
+                )}
+              </div>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploadingImage}
+                className="absolute -bottom-1 -right-1 w-8 h-8 bg-white text-blue-600 rounded-full flex items-center justify-center shadow-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
+              >
+                {isUploadingImage ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent"></div>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                )}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="hidden"
+              />
             </div>
             <div className="flex-1">
               <h2 className="text-2xl font-bold mb-1">{user?.nickname || 'User'}</h2>

@@ -7,6 +7,7 @@ interface AuthenticatedUser {
   userId: number;
   email: string;
   nickname: string;
+  profile_image_url?: string | null;
   age_group?: number | null;
   gender?: string | null;
 }
@@ -30,10 +31,13 @@ interface Room {
   title: string;
   hostId: number; // 항상 로그인한 사용자만 호스트 가능
   hostNickname: string;
+  hostProfileImage?: string | null; // 호스트 프로필 이미지
   language: string; // korean, english, japanese
   topic: string; // free, romance, hobby, business, travel
   callType: 'audio' | 'video'; // 오디오콜 or 비디오콜
   maxParticipants: number; // 현재는 2명 고정
+  isPrivate: boolean; // 비공개 방 여부
+  password?: string; // 비공개 방 비밀번호
   participants: Participant[];
   createdAt: string;
   sessionStartedAt?: Date; // 2명이 모였을 때 세션 시작 시간
@@ -41,7 +45,8 @@ interface Room {
 
 export function initializeSocketHandlers(io: SocketIOServer) {
   // 연결된 사용자 관리
-  const authenticatedUsers = new Map<string, AuthenticatedUser>(); // socketId -> user
+  const authenticatedUsers = new Map<number, AuthenticatedUser>(); // userId -> user (중복 제거됨)
+  const userSocketIds = new Map<string, number>(); // socketId -> userId (disconnect 시 필요)
   const anonymousUsers = new Map<string, AnonymousUser>(); // socketId -> anonymous
 
   // 방 목록 (임시 - 나중에 Redis로 변경)
@@ -51,10 +56,12 @@ export function initializeSocketHandlers(io: SocketIOServer) {
   function broadcastOnlineCount() {
     const totalOnline = authenticatedUsers.size + anonymousUsers.size;
 
-    // 로그인한 사용자 목록 (닉네임만)
+    // 로그인한 사용자 목록 (닉네임, 프로필 이미지 포함)
+    // authenticatedUsers는 이미 userId를 키로 사용하므로 중복 없음
     const authenticatedUserList = Array.from(authenticatedUsers.values()).map(user => ({
       userId: user.userId,
       nickname: user.nickname,
+      profile_image_url: user.profile_image_url,
       age_group: user.age_group,
       gender: user.gender,
     }));
@@ -93,9 +100,11 @@ export function initializeSocketHandlers(io: SocketIOServer) {
     const authenticatedUserList = Array.from(authenticatedUsers.values()).map(user => ({
       userId: user.userId,
       nickname: user.nickname,
+      profile_image_url: user.profile_image_url,
       age_group: user.age_group,
       gender: user.gender,
     }));
+
     socket.emit('onlineCount', {
       total: totalOnline,
       authenticated: authenticatedUsers.size,
@@ -108,6 +117,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
       userId: number;
       email: string;
       nickname: string;
+      profile_image_url?: string | null;
       age_group?: number | null;
       gender?: string | null;
     }) => {
@@ -118,17 +128,19 @@ export function initializeSocketHandlers(io: SocketIOServer) {
           logger.log(`🔄 익명 → 인증 전환: ${data.nickname} (${socket.id})`);
         }
 
-        // 로그인한 사용자로 등록
-        authenticatedUsers.set(socket.id, {
+        // 로그인한 사용자로 등록 (userId를 키로 사용 -> 중복 제거됨)
+        authenticatedUsers.set(data.userId, {
           socketId: socket.id,
           userId: data.userId,
           email: data.email,
           nickname: data.nickname,
+          profile_image_url: data.profile_image_url,
           age_group: data.age_group,
           gender: data.gender,
         });
-        logger.log(`🔐 Authenticated user: ${data.nickname} (${socket.id}) - age: ${data.age_group}, gender: ${data.gender}`);
-        logger.log(`📊 Total: ${authenticatedUsers.size} authenticated, ${anonymousUsers.size} anonymous`);
+        userSocketIds.set(socket.id, data.userId);
+        logger.log(`🔐 Authenticated user: ${data.nickname} (userId: ${data.userId}, socketId: ${socket.id}) - age: ${data.age_group}, gender: ${data.gender}`);
+        logger.log(`📊 Total: ${authenticatedUsers.size} unique authenticated users, ${anonymousUsers.size} anonymous`);
 
         // 온라인 사용자 수 브로드캐스트
         broadcastOnlineCount();
@@ -150,9 +162,11 @@ export function initializeSocketHandlers(io: SocketIOServer) {
       const authenticatedUserList = Array.from(authenticatedUsers.values()).map(user => ({
         userId: user.userId,
         nickname: user.nickname,
+        profile_image_url: user.profile_image_url,
         age_group: user.age_group,
         gender: user.gender,
       }));
+
       socket.emit('onlineCount', {
         total: totalOnline,
         authenticated: authenticatedUsers.size,
@@ -167,12 +181,22 @@ export function initializeSocketHandlers(io: SocketIOServer) {
       title: string;
       language: string;
       topic: string;
-      callType: 'audio' | 'video';
+      roomType: 'voice' | 'video';
+      isPrivate: boolean;
+      password?: string;
     }) => {
-      const user = authenticatedUsers.get(socket.id);
+      // socketId로 userId를 찾아서, userId로 user 조회
+      const userId = userSocketIds.get(socket.id);
+      const user = userId ? authenticatedUsers.get(userId) : null;
 
       if (!user) {
         socket.emit('error', { message: '방을 만들려면 로그인이 필요합니다.' });
+        return;
+      }
+
+      // 비공개 방인 경우 비밀번호 검증
+      if (data.isPrivate && !data.password) {
+        socket.emit('error', { message: '비공개 방은 비밀번호가 필요합니다.' });
         return;
       }
 
@@ -191,10 +215,13 @@ export function initializeSocketHandlers(io: SocketIOServer) {
         title: data.title,
         hostId: user.userId,
         hostNickname: user.nickname,
+        hostProfileImage: user.profile_image_url,
         language: data.language,
         topic: data.topic,
-        callType: data.callType,
+        callType: data.roomType === 'voice' ? 'audio' : 'video',
         maxParticipants: 2,
+        isPrivate: data.isPrivate,
+        password: data.isPrivate ? data.password : undefined,
         participants: [
           {
             userId: user.userId,
@@ -207,7 +234,8 @@ export function initializeSocketHandlers(io: SocketIOServer) {
       };
 
       rooms.set(room.id, room);
-      logger.log(`🏠 Room created: ${room.title} by ${user.nickname} (${data.callType})`);
+      const privacyLabel = data.isPrivate ? '비공개' : '공개';
+      logger.log(`🏠 Room created: ${room.title} by ${user.nickname} (${data.roomType}, ${privacyLabel})`);
 
       // 방 생성자에게 성공 응답
       socket.emit('roomCreated', { roomId: room.id });
@@ -218,7 +246,8 @@ export function initializeSocketHandlers(io: SocketIOServer) {
 
     // 방 입장 (로그인/비로그인 모두 가능)
     socket.on('joinRoom', (data: { roomId: string; nickname?: string }) => {
-      const authUser = authenticatedUsers.get(socket.id);
+      const userId = userSocketIds.get(socket.id);
+      const authUser = userId ? authenticatedUsers.get(userId) : null;
       const anonUser = anonymousUsers.get(socket.id);
 
       // 로그인하지 않은 경우 닉네임 필요
@@ -392,12 +421,14 @@ export function initializeSocketHandlers(io: SocketIOServer) {
 
     // 연결 해제
     socket.on('disconnect', () => {
-      const authUser = authenticatedUsers.get(socket.id);
+      const userId = userSocketIds.get(socket.id);
+      const authUser = userId ? authenticatedUsers.get(userId) : null;
       const anonUser = anonymousUsers.get(socket.id);
 
-      if (authUser) {
-        logger.log(`❌ Authenticated user disconnected: ${authUser.nickname} (${socket.id})`);
-        authenticatedUsers.delete(socket.id);
+      if (authUser && userId) {
+        logger.log(`❌ Authenticated user disconnected: ${authUser.nickname} (userId: ${userId}, socketId: ${socket.id})`);
+        authenticatedUsers.delete(userId);
+        userSocketIds.delete(socket.id);
       } else if (anonUser) {
         logger.log(`❌ Anonymous user disconnected: ${socket.id}`);
         anonymousUsers.delete(socket.id);

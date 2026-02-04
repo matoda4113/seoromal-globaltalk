@@ -1,6 +1,7 @@
 interface AuthenticatedUser {
   userId: number;
   nickname: string;
+  profile_image_url?: string | null;
   age_group?: number | null;
   gender?: string | null;
 }
@@ -60,9 +61,9 @@ export default function OnlineUsersModal({
 
   const getGenderText = (gender?: string | null) => {
     if (!gender) return '';
-    if (locale === 'ko') return gender === 'male' ? '남' : '여';
-    if (locale === 'ja') return gender === 'male' ? '男' : '女';
-    return gender === 'male' ? 'M' : 'F';
+    if (locale === 'ko') return gender === 'man' ? '남' : '여';
+    if (locale === 'ja') return gender === 'man' ? '男' : '女';
+    return gender === 'man' ? 'M' : 'F';
   };
 
   return (
@@ -111,8 +112,16 @@ export default function OnlineUsersModal({
                         key={user.userId}
                         className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
                       >
-                        <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                          {user.nickname[0].toUpperCase()}
+                        <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm overflow-hidden">
+                          {user.profile_image_url ? (
+                            <img
+                              src={user.profile_image_url}
+                              alt={user.nickname}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            user.nickname[0].toUpperCase()
+                          )}
                         </div>
                         <div className="flex-1">
                           <p className="font-semibold text-gray-900">{user.nickname}</p>

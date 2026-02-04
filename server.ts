@@ -20,6 +20,7 @@ import { initializeSocketHandlers } from './server/lib/socket-handlers';
 // API routes
 import authRoutes from './server/routes/auth.routes';
 import pointsRoutes from './server/routes/points.routes';
+import uploadRoutes from './server/routes/upload.routes';
 
 const dev = process.env.NODE_ENV !== 'production';
 const PORT = process.env.PORT || 4000;
@@ -68,6 +69,7 @@ app.prepare().then(() => {
   // API routes
   expressApp.use('/auth', authRoutes);
   expressApp.use('/points', pointsRoutes);
+  expressApp.use('/upload', uploadRoutes);
 
   // Initialize Socket.IO handlers
   initializeSocketHandlers(io);

@@ -85,6 +85,7 @@ export interface User {
   name?: string;
   nickname?: string;
   bio?: string | null;
+  profile_image_url?: string | null;
   provider: string;
   age_group?: number | null;
   gender?: string | null;
@@ -306,6 +307,27 @@ class AuthService {
   async isLoggedIn(): Promise<boolean> {
     const user = await this.getCurrentUser();
     return user !== null;
+  }
+
+  /**
+   * 프로필 이미지 업로드
+   * @param file - webp 형식의 이미지 파일
+   * @returns 업로드된 이미지 URL과 업데이트된 사용자 정보
+   */
+  async uploadProfileImage(file: File): Promise<{ imageUrl: string; user: User }> {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const response = await apiClient.post<{
+      message: string;
+      data: { imageUrl: string; user: User };
+    }>('/upload/profile-image', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+
+    return response.data.data;
   }
 }
 
