@@ -103,6 +103,7 @@ export interface SocialLoginResponse {
       name?: string;
       nickname?: string;
       bio?: string | null;
+      profile_image_url?: string | null;
       provider: string;
       age_group?: number | null;
       gender?: string | null;
@@ -121,6 +122,7 @@ export interface EmailRegisterResponse {
       userId: number;
       email: string;
       nickname: string;
+      profile_image_url?: string | null;
       provider: string;
       age_group?: number | null;
       gender?: string | null;
@@ -138,6 +140,7 @@ export interface EmailLoginResponse {
       userId: number;
       email: string;
       nickname?: string;
+      profile_image_url?: string | null;
       provider: string;
       age_group?: number | null;
       gender?: string | null;

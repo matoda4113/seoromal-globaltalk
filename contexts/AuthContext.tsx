@@ -56,9 +56,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           userId: userInfo.userId,
           email: userInfo.email,
           nickname: userInfo.nickname || userInfo.email,
-          profile_image_url: userInfo.profile_image_url,
-          age_group: userInfo.age_group,
-          gender: userInfo.gender,
+          profile_image_url: userInfo.profile_image_url || null,
+          age_group: userInfo.age_group || null,
+          gender: userInfo.gender || null,
         });
         logger.info('1Socket authenticated with user:', userInfo);
       } else {

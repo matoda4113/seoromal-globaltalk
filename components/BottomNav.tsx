@@ -1,13 +1,16 @@
 'use client';
 
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type Locale } from '@/lib/i18n';
+
+export type TabType = 'home' | 'community' | 'mypage';
 
 interface BottomNavProps {
   locale: Locale;
   homeText: string;
   communityText: string;
   mypageText: string;
+  activeTab: TabType;
+  onTabChange: (tab: TabType) => void;
 }
 
 export default function BottomNav({
@@ -15,38 +18,25 @@ export default function BottomNav({
   homeText,
   communityText,
   mypageText,
+  activeTab,
+  onTabChange,
 }: BottomNavProps) {
-  const pathname = usePathname();
-  const router = useRouter();
-  const searchParams = useSearchParams();
-
-  const navigate = (path: string) => {
-    const url = `${path}?lang=${locale}`;
-    router.push(url);
-  };
-
-  const isActive = (path: string) => {
-    if (path === '/app') {
-      return pathname === '/app';
-    }
-    return pathname.startsWith(path);
-  };
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50">
       <div className="flex justify-around items-center h-16">
         {/* Home */}
         <button
-          onClick={() => navigate('/app')}
+          onClick={() => onTabChange('home')}
           className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
-            isActive('/app')
+            activeTab === 'home'
               ? 'text-blue-600'
               : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           <svg
             className="w-6 h-6 mb-1"
-            fill={isActive('/app') ? 'currentColor' : 'none'}
+            fill={activeTab === 'home' ? 'currentColor' : 'none'}
             stroke="currentColor"
             viewBox="0 0 24 24"
           >
@@ -62,16 +52,16 @@ export default function BottomNav({
 
         {/* Community */}
         <button
-          onClick={() => navigate('/app/community')}
+          onClick={() => onTabChange('community')}
           className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
-            isActive('/app/community')
+            activeTab === 'community'
               ? 'text-blue-600'
               : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           <svg
             className="w-6 h-6 mb-1"
-            fill={isActive('/app/community') ? 'currentColor' : 'none'}
+            fill={activeTab === 'community' ? 'currentColor' : 'none'}
             stroke="currentColor"
             viewBox="0 0 24 24"
           >
@@ -87,16 +77,16 @@ export default function BottomNav({
 
         {/* My Page */}
         <button
-          onClick={() => navigate('/app/mypage')}
+          onClick={() => onTabChange('mypage')}
           className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
-            isActive('/app/mypage')
+            activeTab === 'mypage'
               ? 'text-blue-600'
               : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           <svg
             className="w-6 h-6 mb-1"
-            fill={isActive('/app/mypage') ? 'currentColor' : 'none'}
+            fill={activeTab === 'mypage' ? 'currentColor' : 'none'}
             stroke="currentColor"
             viewBox="0 0 24 24"
           >

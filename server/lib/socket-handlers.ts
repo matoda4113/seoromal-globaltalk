@@ -240,6 +240,10 @@ export function initializeSocketHandlers(io: SocketIOServer) {
       // 방 생성자에게 성공 응답
       socket.emit('roomCreated', { roomId: room.id });
 
+      // 호스트를 방에 자동으로 입장시킴
+      socket.emit('roomJoined', serializeRoom(room));
+      logger.log(`👋 Host auto-joined room: ${room.title}`);
+
       // 모든 클라이언트에게 새 방 알림
       io.emit('roomListUpdated', serializeRoom(room));
     });

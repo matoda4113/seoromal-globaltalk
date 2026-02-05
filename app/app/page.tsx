@@ -1,45 +1,52 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getTranslations, type Locale } from '@/lib/i18n';
 import { resolveLocale, setStoredLocale } from '@/lib/locale-storage';
-import BottomNav from '@/components/BottomNav';
-import BottomSheet from '@/components/BottomSheet';
+import BottomNav, { type TabType } from '@/components/BottomNav';
 import { useSocket, type Room } from '@/hooks/useSocket';
-import OnlineUsersModal from '@/components/OnlineUsersModal';
-import CreateRoomModal from '@/components/CreateRoomModal';
+import RoomModal from '@/components/RoomModal';
+import HomeScreen from './screens/HomeScreen';
+import CommunityScreen from './screens/CommunityScreen';
+import MyPageScreen from './screens/MyPageScreen';
 
 export default function AppPage() {
   const searchParams = useSearchParams();
   const [locale, setLocale] = useState<Locale>('en');
-  const [languageFilter, setLanguageFilter] = useState<string>('all');
-  const [topicFilter, setTopicFilter] = useState<string>('all');
-  const [isLanguageSheetOpen, setIsLanguageSheetOpen] = useState(false);
-  const [isTopicSheetOpen, setIsTopicSheetOpen] = useState(false);
-  const [isOnlineUsersModalOpen, setIsOnlineUsersModalOpen] = useState(false);
-  const [isCreateRoomModalOpen, setIsCreateRoomModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabType>('home');
+  const [isRoomModalOpen, setIsRoomModalOpen] = useState(false);
+  const [currentRoomForModal, setCurrentRoomForModal] = useState<Room | null>(null);
 
   // Socket 연결 및 방 목록 가져오기
-  const { rooms, isConnected, onlineCount, createRoom } = useSocket();
+  const { rooms, isConnected, onlineCount, createRoom, currentRoom, leaveRoom } = useSocket();
 
   useEffect(() => {
     const langParam = searchParams.get('lang');
     const resolvedLocale = resolveLocale(langParam);
     setLocale(resolvedLocale);
     setStoredLocale(resolvedLocale);
+
+    // URL 쿼리 파라미터에서 tab 읽기
+    const tabParam = searchParams.get('tab');
+    if (tabParam && (tabParam === 'home' || tabParam === 'community' || tabParam === 'mypage')) {
+      setActiveTab(tabParam as TabType);
+    }
   }, [searchParams]);
 
-  const t = getTranslations(locale);
+  // currentRoom이 변경되면 RoomModal 열기/닫기
+  useEffect(() => {
+    if (currentRoom) {
+      setCurrentRoomForModal(currentRoom);
+      setIsRoomModalOpen(true);
+    } else {
+      // currentRoom이 null이 되면 모달 닫기
+      setIsRoomModalOpen(false);
+      setCurrentRoomForModal(null);
+    }
+  }, [currentRoom]);
 
-  // 필터링된 방 목록
-  const filteredRooms = useMemo(() => {
-    return rooms.filter((room) => {
-      const languageMatch = languageFilter === 'all' || room.language === languageFilter;
-      const topicMatch = topicFilter === 'all' || room.topic === topicFilter;
-      return languageMatch && topicMatch;
-    });
-  }, [rooms, languageFilter, topicFilter]);
+  const t = getTranslations(locale);
 
   const handleLocaleChange = (newLocale: Locale) => {
     setLocale(newLocale);
@@ -73,8 +80,6 @@ export default function AppPage() {
       isPrivate: roomData.isPrivate,
       password: roomData.password,
     });
-
-    setIsCreateRoomModalOpen(false);
   };
 
   return (
@@ -113,90 +118,19 @@ export default function AppPage() {
 
       {/* Main Content */}
       <main className="px-4 py-6">
-        {/* Title and Create Room Button */}
-        <div className="flex justify-between items-center mb-4">
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
-              {t.app.title}
-            </h1>
-            <button
-              onClick={() => setIsOnlineUsersModalOpen(true)}
-              className="flex items-center gap-1 px-3 py-1.5 bg-green-50 text-green-700 rounded-full text-sm font-medium hover:bg-green-100 transition-colors border border-green-200 active:scale-95"
-            >
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span>{onlineCount.total}</span>
-            </button>
-          </div>
-          <button
-            onClick={() => setIsCreateRoomModalOpen(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors shadow-md active:scale-95 min-h-[44px]"
-          >
-            {t.app.createRoom}
-          </button>
-        </div>
-
-        {/* Filters - 한 줄 버튼 */}
-        <div className="mb-6 flex gap-3">
-          {/* Language Filter Button */}
-          <button
-            onClick={() => setIsLanguageSheetOpen(true)}
-            className="flex-1 flex items-center justify-between px-4 py-3 bg-white border border-gray-300 rounded-lg hover:border-blue-500 transition-colors min-h-[48px]"
-          >
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
-              </svg>
-              <span className="text-sm font-medium text-gray-700">
-                {languageFilter === 'all' ? t.app.filters.language : t.app.filters[languageFilter as keyof typeof t.app.filters]}
-              </span>
-            </div>
-            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-
-          {/* Topic Filter Button */}
-          <button
-            onClick={() => setIsTopicSheetOpen(true)}
-            className="flex-1 flex items-center justify-between px-4 py-3 bg-white border border-gray-300 rounded-lg hover:border-blue-500 transition-colors min-h-[48px]"
-          >
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-              </svg>
-              <span className="text-sm font-medium text-gray-700">
-                {topicFilter === 'all' ? t.app.filters.topic : t.app.filters[topicFilter as keyof typeof t.app.filters]}
-              </span>
-            </div>
-            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Room List */}
-        {filteredRooms.length === 0 ? (
-          <div className="text-center py-16">
-            <div className="text-6xl mb-4">🏠</div>
-            <h2 className="text-lg font-bold text-gray-700 mb-2">
-              {t.app.noRooms}
-            </h2>
-            <p className="text-sm text-gray-500">{t.app.noRoomsDesc}</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {filteredRooms.map((room) => (
-              <RoomCard
-                key={room.id}
-                room={room}
-                joinText={t.app.joinRoom}
-                participantsText={t.app.participants}
-                languageText={t.app.filters[room.language as keyof typeof t.app.filters] as string}
-                topicText={t.app.filters[room.topic as keyof typeof t.app.filters] as string}
-              />
-            ))}
-          </div>
+        {activeTab === 'home' && (
+          <HomeScreen
+            rooms={rooms}
+            onlineCount={onlineCount}
+            t={t}
+            locale={locale}
+            onCreateRoom={handleCreateRoom}
+          />
         )}
+
+        {activeTab === 'community' && <CommunityScreen locale={locale} t={t} />}
+
+        {activeTab === 'mypage' && <MyPageScreen locale={locale} />}
       </main>
 
       {/* Bottom Navigation */}
@@ -205,234 +139,23 @@ export default function AppPage() {
         homeText={t.app.nav.home}
         communityText={t.app.nav.community}
         mypageText={t.app.nav.mypage}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
       />
 
-      {/* Language Filter Bottom Sheet */}
-      <BottomSheet
-        isOpen={isLanguageSheetOpen}
-        onClose={() => setIsLanguageSheetOpen(false)}
-        title={t.app.filters.language}
-      >
-        <div className="space-y-2">
-          <FilterOption
-            label={t.app.filters.all}
-            active={languageFilter === 'all'}
-            onClick={() => {
-              setLanguageFilter('all');
-              setIsLanguageSheetOpen(false);
-            }}
-          />
-          <FilterOption
-            label={t.app.filters.korean}
-            active={languageFilter === 'korean'}
-            onClick={() => {
-              setLanguageFilter('korean');
-              setIsLanguageSheetOpen(false);
-            }}
-          />
-          <FilterOption
-            label={t.app.filters.english}
-            active={languageFilter === 'english'}
-            onClick={() => {
-              setLanguageFilter('english');
-              setIsLanguageSheetOpen(false);
-            }}
-          />
-          <FilterOption
-            label={t.app.filters.japanese}
-            active={languageFilter === 'japanese'}
-            onClick={() => {
-              setLanguageFilter('japanese');
-              setIsLanguageSheetOpen(false);
-            }}
-          />
-        </div>
-      </BottomSheet>
-
-      {/* Topic Filter Bottom Sheet */}
-      <BottomSheet
-        isOpen={isTopicSheetOpen}
-        onClose={() => setIsTopicSheetOpen(false)}
-        title={t.app.filters.topic}
-      >
-        <div className="space-y-2">
-          <FilterOption
-            label={t.app.filters.all}
-            active={topicFilter === 'all'}
-            onClick={() => {
-              setTopicFilter('all');
-              setIsTopicSheetOpen(false);
-            }}
-          />
-          <FilterOption
-            label={t.app.filters.free}
-            active={topicFilter === 'free'}
-            onClick={() => {
-              setTopicFilter('free');
-              setIsTopicSheetOpen(false);
-            }}
-          />
-          <FilterOption
-            label={t.app.filters.romance}
-            active={topicFilter === 'romance'}
-            onClick={() => {
-              setTopicFilter('romance');
-              setIsTopicSheetOpen(false);
-            }}
-          />
-          <FilterOption
-            label={t.app.filters.hobby}
-            active={topicFilter === 'hobby'}
-            onClick={() => {
-              setTopicFilter('hobby');
-              setIsTopicSheetOpen(false);
-            }}
-          />
-          <FilterOption
-            label={t.app.filters.business}
-            active={topicFilter === 'business'}
-            onClick={() => {
-              setTopicFilter('business');
-              setIsTopicSheetOpen(false);
-            }}
-          />
-          <FilterOption
-            label={t.app.filters.travel}
-            active={topicFilter === 'travel'}
-            onClick={() => {
-              setTopicFilter('travel');
-              setIsTopicSheetOpen(false);
-            }}
-          />
-        </div>
-      </BottomSheet>
-
-      {/* Online Users Modal */}
-      <OnlineUsersModal
-        isOpen={isOnlineUsersModalOpen}
-        onClose={() => setIsOnlineUsersModalOpen(false)}
-        authenticatedUsers={onlineCount.authenticatedUsers || []}
-        anonymousCount={onlineCount.anonymous || 0}
-        locale={locale}
-      />
-
-      {/* Create Room Modal */}
-      <CreateRoomModal
-        isOpen={isCreateRoomModalOpen}
-        onClose={() => setIsCreateRoomModalOpen(false)}
-        onCreate={handleCreateRoom}
-        locale={locale}
-      />
-    </div>
-  );
-}
-
-function FilterOption({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`w-full text-left px-4 py-3 rounded-lg transition-colors min-h-[48px] flex items-center justify-between ${
-        active
-          ? 'bg-blue-50 text-blue-700 font-semibold'
-          : 'bg-white text-gray-700 hover:bg-gray-50'
-      }`}
-    >
-      <span>{label}</span>
-      {active && (
-        <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-        </svg>
+      {/* Room Modal (전체 화면) */}
+      {currentRoomForModal && (
+        <RoomModal
+          isOpen={isRoomModalOpen}
+          onClose={() => {
+            setIsRoomModalOpen(false);
+            setCurrentRoomForModal(null);
+          }}
+          onLeave={leaveRoom}
+          room={currentRoomForModal}
+          locale={locale}
+        />
       )}
-    </button>
-  );
-}
-
-function RoomCard({
-  room,
-  joinText,
-  participantsText,
-  languageText,
-  topicText,
-}: {
-  room: Room;
-  joinText: string;
-  participantsText: string;
-  languageText: string;
-  topicText: string;
-}) {
-  return (
-    <div className="bg-white p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow border border-gray-200">
-      {/* Room Title */}
-      <div className="flex items-center gap-2 mb-2">
-        <h3 className="text-base font-bold text-gray-900 line-clamp-1 flex-1">
-          {room.title}
-        </h3>
-        <div className="flex items-center gap-1 flex-shrink-0">
-          {/* Call Type Icon */}
-          {room.callType === 'audio' ? (
-            <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
-            </svg>
-          ) : (
-            <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-            </svg>
-          )}
-          {/* Lock Icon */}
-          {room.isPrivate && (
-            <svg className="w-5 h-5 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-            </svg>
-          )}
-        </div>
-      </div>
-
-      {/* Host Info */}
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white text-sm font-bold overflow-hidden">
-          {room.hostProfileImage ? (
-            <img
-              src={room.hostProfileImage}
-              alt={room.hostNickname}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            room.hostNickname[0].toUpperCase()
-          )}
-        </div>
-        <div>
-          <p className="text-xs text-gray-500">Host</p>
-          <p className="text-sm font-semibold text-gray-700">{room.hostNickname}</p>
-        </div>
-      </div>
-
-      {/* Tags (Language & Topic) */}
-      <div className="mb-3 flex gap-2">
-        <span className="inline-block bg-blue-50 text-blue-700 px-2 py-1 rounded-full text-xs font-medium">
-          {languageText}
-        </span>
-        <span className="inline-block bg-purple-50 text-purple-700 px-2 py-1 rounded-full text-xs font-medium">
-          {topicText}
-        </span>
-      </div>
-
-      {/* Bottom Section */}
-      <div className="flex justify-between items-center pt-3 border-t border-gray-100">
-        <div className="text-xs text-gray-600">
-          {room.participants.length}/{room.maxParticipants} {participantsText}
-        </div>
-        <button className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-700 transition-colors active:scale-95 min-h-[40px]">
-          {joinText}
-        </button>
-      </div>
     </div>
   );
 }
