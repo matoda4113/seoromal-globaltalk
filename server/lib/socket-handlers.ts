@@ -7,8 +7,8 @@ interface AuthenticatedUser {
   userId: number;
   email: string;
   nickname: string;
-  profile_image_url?: string | null;
-  age_group?: number | null;
+  profileImageUrl?: string | null;
+  ageGroup?: number | null;
   gender?: string | null;
 }
 
@@ -21,8 +21,11 @@ interface AnonymousUser {
 interface Participant {
   userId: number | null; // 비로그인 사용자는 null
   nickname: string;
+  profileImageUrl?: string | null; // 프로필 이미지
   socketId: string;
   isHost: boolean;
+  ageGroup?: number | null;
+  gender?: string | null;
 }
 
 // 방 정보 타입
@@ -39,8 +42,8 @@ interface Room {
   isPrivate: boolean; // 비공개 방 여부
   password?: string; // 비공개 방 비밀번호
   participants: Participant[];
-  createdAt: string;
-  sessionStartedAt?: Date; // 2명이 모였을 때 세션 시작 시간
+  createdAt: string; // 최초 방생성 타임
+  sessionStartedAt?: Date; // 대화 시작시간
 }
 
 export function initializeSocketHandlers(io: SocketIOServer) {
@@ -61,8 +64,8 @@ export function initializeSocketHandlers(io: SocketIOServer) {
     const authenticatedUserList = Array.from(authenticatedUsers.values()).map(user => ({
       userId: user.userId,
       nickname: user.nickname,
-      profile_image_url: user.profile_image_url,
-      age_group: user.age_group,
+      profileImageUrl: user.profileImageUrl,
+      ageGroup: user.ageGroup,
       gender: user.gender,
     }));
 
@@ -81,6 +84,56 @@ export function initializeSocketHandlers(io: SocketIOServer) {
     };
   }
 
+  // 사용자가 방을 나갈 때 처리 (leaveRoom, disconnect 공통 로직)
+  function handleUserLeaveRoom(
+    socketId: string,
+    reason: 'left' | 'disconnected'
+  ): { roomId: string; wasHost: boolean } | null {
+    for (const [roomId, room] of rooms.entries()) {
+      const participantIndex = room.participants.findIndex((p) => p.socketId === socketId);
+
+      if (participantIndex !== -1) {
+        const participant = room.participants[participantIndex];
+        const isHost = participant.isHost;
+
+        if (isHost) {
+          // 호스트가 나감 - 방 삭제
+          logger.log(`🗑️ Room deleted: ${room.title} (host ${reason})`);
+
+          room.participants.forEach((p) => {
+            io.to(p.socketId).emit('roomClosed', {
+              roomId: room.id,
+              reason: reason === 'left' ? 'host_left' : 'host_disconnected',
+              message: reason === 'left'
+                ? '호스트가 방을 나가 세션이 종료되었습니다.'
+                : '호스트의 연결이 끊어져 세션이 종료되었습니다.',
+            });
+          });
+
+          rooms.delete(roomId);
+          io.emit('roomDeleted', roomId);
+        } else {
+          // 게스트가 나감 - 참가자 목록에서 제거
+          room.participants.splice(participantIndex, 1);
+          room.sessionStartedAt = undefined;
+          logger.log(`👋 ${participant.nickname} ${reason} room: ${room.title}`);
+
+          rooms.set(roomId, room);
+
+          room.participants.forEach((p) => {
+            io.to(p.socketId).emit('roomUpdated', serializeRoom(room));
+          });
+
+          io.emit('roomListUpdated', serializeRoom(room));
+        }
+
+        return { roomId, wasHost: isHost };
+      }
+    }
+
+    return null;
+  }
+
   io.on('connection', (socket: Socket) => {
     logger.log(`✅ Client connected: ${socket.id}`);
 
@@ -95,30 +148,14 @@ export function initializeSocketHandlers(io: SocketIOServer) {
     // 온라인 카운트 브로드캐스트
     broadcastOnlineCount();
 
-    // 새로 접속한 클라이언트에게도 즉시 온라인 카운트 전송
-    const totalOnline = authenticatedUsers.size + anonymousUsers.size;
-    const authenticatedUserList = Array.from(authenticatedUsers.values()).map(user => ({
-      userId: user.userId,
-      nickname: user.nickname,
-      profile_image_url: user.profile_image_url,
-      age_group: user.age_group,
-      gender: user.gender,
-    }));
-
-    socket.emit('onlineCount', {
-      total: totalOnline,
-      authenticated: authenticatedUsers.size,
-      anonymous: anonymousUsers.size,
-      authenticatedUsers: authenticatedUserList,
-    });
 
     // 사용자 인증 (로그인한 경우)
     socket.on('authenticate', (data: {
       userId: number;
       email: string;
       nickname: string;
-      profile_image_url?: string | null;
-      age_group?: number | null;
+      profileImageUrl?: string | null;
+      ageGroup?: number | null;
       gender?: string | null;
     }) => {
       if (data.userId && data.email && data.nickname) {
@@ -134,12 +171,12 @@ export function initializeSocketHandlers(io: SocketIOServer) {
           userId: data.userId,
           email: data.email,
           nickname: data.nickname,
-          profile_image_url: data.profile_image_url,
-          age_group: data.age_group,
+          profileImageUrl: data.profileImageUrl,
+          ageGroup: data.ageGroup,
           gender: data.gender,
         });
         userSocketIds.set(socket.id, data.userId);
-        logger.log(`🔐 Authenticated user: ${data.nickname} (userId: ${data.userId}, socketId: ${socket.id}) - age: ${data.age_group}, gender: ${data.gender}`);
+        logger.log(`🔐 Authenticated user: ${data.nickname} (userId: ${data.userId}, socketId: ${socket.id}) - age: ${data.ageGroup}, gender: ${data.gender}`);
         logger.log(`📊 Total: ${authenticatedUsers.size} unique authenticated users, ${anonymousUsers.size} anonymous`);
 
         // 온라인 사용자 수 브로드캐스트
@@ -162,8 +199,8 @@ export function initializeSocketHandlers(io: SocketIOServer) {
       const authenticatedUserList = Array.from(authenticatedUsers.values()).map(user => ({
         userId: user.userId,
         nickname: user.nickname,
-        profile_image_url: user.profile_image_url,
-        age_group: user.age_group,
+        profileImageUrl: user.profileImageUrl,
+        ageGroup: user.ageGroup,
         gender: user.gender,
       }));
 
@@ -215,7 +252,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
         title: data.title,
         hostId: user.userId,
         hostNickname: user.nickname,
-        hostProfileImage: user.profile_image_url,
+        hostProfileImage: user.profileImageUrl,
         language: data.language,
         topic: data.topic,
         callType: data.roomType === 'voice' ? 'audio' : 'video',
@@ -226,8 +263,11 @@ export function initializeSocketHandlers(io: SocketIOServer) {
           {
             userId: user.userId,
             nickname: user.nickname,
+            profileImageUrl: user.profileImageUrl,
             socketId: socket.id,
             isHost: true,
+            ageGroup: user.ageGroup,
+            gender :user.gender,
           },
         ],
         createdAt: new Date().toISOString(),
@@ -248,15 +288,14 @@ export function initializeSocketHandlers(io: SocketIOServer) {
       io.emit('roomListUpdated', serializeRoom(room));
     });
 
-    // 방 입장 (로그인/비로그인 모두 가능)
+    // 방 입장 (로그인 유저만 가능)
     socket.on('joinRoom', (data: { roomId: string; nickname?: string }) => {
       const userId = userSocketIds.get(socket.id);
       const authUser = userId ? authenticatedUsers.get(userId) : null;
-      const anonUser = anonymousUsers.get(socket.id);
 
-      // 로그인하지 않은 경우 닉네임 필요
-      if (!authUser && !data.nickname) {
-        socket.emit('error', { message: '닉네임을 입력해주세요.' });
+      // 로그인하지 않은 경우 팅김
+      if (!authUser) {
+        socket.emit('error', { message: '로그인 이후 방 입장 가능합니다.' });
         return;
       }
 
@@ -285,18 +324,17 @@ export function initializeSocketHandlers(io: SocketIOServer) {
       const newParticipant: Participant = {
         userId: authUser?.userId || null,
         nickname: authUser?.nickname || data.nickname || 'Guest',
+        profileImageUrl: authUser?.profileImageUrl || null,
         socketId: socket.id,
         isHost: false,
+        ageGroup: authUser?.ageGroup || null,
+        gender: authUser?.gender || null
+
       };
 
       room.participants.push(newParticipant);
       logger.log(`👋 User ${newParticipant.nickname} joined room: ${room.title}`);
       logger.log(`👥 현재 참가자 목록 (${room.participants.length}/${room.maxParticipants}):`);
-      room.participants.forEach((p, idx) => {
-        const role = p.isHost ? '호스트' : '게스트';
-        const userType = p.userId ? '로그인' : '비로그인';
-        logger.log(`   ${idx + 1}. ${p.nickname} (${role}, ${userType})`);
-      });
 
       // 2명이 모였으면 세션 시작
       if (room.participants.length === 2 && !room.sessionStartedAt) {
@@ -334,94 +372,16 @@ export function initializeSocketHandlers(io: SocketIOServer) {
         return;
       }
 
-      const participant = room.participants[participantIndex];
-      const isHost = participant.isHost;
-
-      // 호스트가 나가면 방 삭제
-      if (isHost) {
-        logger.log(`🗑️  Room deleted: ${room.title} (host left)`);
-
-        // 모든 참가자에게 방 종료 알림
-        room.participants.forEach((p) => {
-          io.to(p.socketId).emit('roomClosed', {
-            roomId: room.id,
-            reason: 'host_left',
-            message: '호스트가 방을 나가 세션이 종료되었습니다.',
-          });
-        });
-
-        rooms.delete(data.roomId);
-        io.emit('roomDeleted', data.roomId);
-      } else {
-        // 게스트가 나가면 참가자 목록에서 제거
-        room.participants.splice(participantIndex, 1);
-        logger.log(`👋 ${participant.nickname} left room: ${room.title}`);
-
-        // 세션 시작 시간 초기화
-        room.sessionStartedAt = undefined;
-
-        rooms.set(room.id, room);
-
-        // 남은 참가자에게 업데이트 알림
-        room.participants.forEach((p) => {
-          io.to(p.socketId).emit('roomUpdated', serializeRoom(room));
-        });
-
-        // 모든 클라이언트에게 방 목록 업데이트
-        io.emit('roomListUpdated', serializeRoom(room));
-      }
+      // 공통 로직 호출
+      const result = handleUserLeaveRoom(socket.id, 'left');
 
       // 나간 사용자에게 성공 응답
-      socket.emit('roomLeft', { roomId: data.roomId });
+      if (result) {
+        socket.emit('roomLeft', { roomId: result.roomId });
+      }
     });
 
-    // WebRTC 시그널링 (offer)
-    socket.on('webrtc-offer', (data: { roomId: string; offer: any }) => {
-      const room = rooms.get(data.roomId);
-      if (!room) return;
 
-      // 같은 방의 다른 참가자에게 전달
-      room.participants.forEach((p) => {
-        if (p.socketId !== socket.id) {
-          io.to(p.socketId).emit('webrtc-offer', {
-            offer: data.offer,
-            from: socket.id,
-          });
-        }
-      });
-    });
-
-    // WebRTC 시그널링 (answer)
-    socket.on('webrtc-answer', (data: { roomId: string; answer: any }) => {
-      const room = rooms.get(data.roomId);
-      if (!room) return;
-
-      // 같은 방의 다른 참가자에게 전달
-      room.participants.forEach((p) => {
-        if (p.socketId !== socket.id) {
-          io.to(p.socketId).emit('webrtc-answer', {
-            answer: data.answer,
-            from: socket.id,
-          });
-        }
-      });
-    });
-
-    // WebRTC 시그널링 (ICE candidate)
-    socket.on('webrtc-ice-candidate', (data: { roomId: string; candidate: any }) => {
-      const room = rooms.get(data.roomId);
-      if (!room) return;
-
-      // 같은 방의 다른 참가자에게 전달
-      room.participants.forEach((p) => {
-        if (p.socketId !== socket.id) {
-          io.to(p.socketId).emit('webrtc-ice-candidate', {
-            candidate: data.candidate,
-            from: socket.id,
-          });
-        }
-      });
-    });
 
     // 연결 해제
     socket.on('disconnect', () => {
@@ -438,43 +398,8 @@ export function initializeSocketHandlers(io: SocketIOServer) {
         anonymousUsers.delete(socket.id);
       }
 
-      // 참가 중인 방에서 제거
-      for (const [roomId, room] of rooms.entries()) {
-        const participantIndex = room.participants.findIndex((p) => p.socketId === socket.id);
-
-        if (participantIndex !== -1) {
-          const participant = room.participants[participantIndex];
-          logger.log(`🔌 ${participant.nickname} disconnected from room: ${room.title}`);
-
-          // 호스트가 연결 해제되면 방 삭제
-          if (participant.isHost) {
-            room.participants.forEach((p) => {
-              io.to(p.socketId).emit('roomClosed', {
-                roomId: room.id,
-                reason: 'host_disconnected',
-                message: '호스트의 연결이 끊어져 세션이 종료되었습니다.',
-              });
-            });
-
-            rooms.delete(roomId);
-            io.emit('roomDeleted', roomId);
-          } else {
-            // 게스트가 연결 해제되면 참가자 목록에서 제거
-            room.participants.splice(participantIndex, 1);
-            room.sessionStartedAt = undefined;
-
-            rooms.set(roomId, room);
-
-            // 남은 참가자에게 업데이트 알림
-            room.participants.forEach((p) => {
-              io.to(p.socketId).emit('roomUpdated', serializeRoom(room));
-            });
-
-            io.emit('roomListUpdated', serializeRoom(room));
-          }
-          break;
-        }
-      }
+      // 참가 중인 방에서 제거 (공통 로직 호출)
+      handleUserLeaveRoom(socket.id, 'disconnected');
 
       logger.log(`📊 Total: ${authenticatedUsers.size} authenticated, ${anonymousUsers.size} anonymous`);
 

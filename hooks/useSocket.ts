@@ -3,34 +3,41 @@ import { getSocket } from '@/lib/socket';
 import logger from '@/lib/logger';
 
 interface Participant {
+
   userId: number | null; // 비로그인 사용자는 null
   nickname: string;
+  profileImageUrl?: string | null; // 프로필 이미지
   socketId: string;
   isHost: boolean;
+  ageGroup?: number | null;
+  gender?: string | null;
+
 }
 
 export interface Room {
   id: string;
   title: string;
-  hostId: number;
+  hostId: number; // 항상 로그인한 사용자만 호스트 가능
   hostNickname: string;
-  hostProfileImage?: string | null;
+  hostProfileImage?: string | null; // 호스트 프로필 이미지
   language: string; // korean, english, japanese
   topic: string; // free, romance, hobby, business, travel
-  callType: 'audio' | 'video';
-  maxParticipants: number;
-  isPrivate: boolean;
-  password?: string;
+  callType: 'audio' | 'video'; // 오디오콜 or 비디오콜
+  maxParticipants: number; // 현재는 2명 고정
+  isPrivate: boolean; // 비공개 방 여부
+  password?: string; // 비공개 방 비밀번호
   participants: Participant[];
-  createdAt: string;
-  sessionStartedAt?: string;
+  createdAt: string; // 최초 방생성 타임
+  sessionStartedAt?: Date; // 대화 시작시간
 }
 
 interface AuthenticatedUser {
+  socketId: string;
   userId: number;
+  email: string;
   nickname: string;
-  profile_image_url?: string | null;
-  age_group?: number | null;
+  profileImageUrl?: string | null;
+  ageGroup?: number | null;
   gender?: string | null;
 }
 
@@ -203,7 +210,8 @@ export function useSocket() {
     userId: number;
     email: string;
     nickname: string;
-    age_group?: number | null;
+    profileImageUrl?: string | null;
+    ageGroup?: number | null;
     gender?: string | null;
   }) => {
     const socket = getSocket();
