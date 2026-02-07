@@ -117,7 +117,7 @@ export default function MyPageScreen({ locale }: MyPageScreenProps) {
     if (user) {
       setNickname(user.nickname || '');
       setBio(user.bio || '');
-      setAgeGroup(user.age_group || null);
+      setAgeGroup(user.ageGroup || null);
       setGender(user.gender || '');
     }
   }, [user]);
@@ -294,9 +294,9 @@ export default function MyPageScreen({ locale }: MyPageScreenProps) {
         <div className="flex items-center gap-4 mb-4">
           <div className="relative">
             <div className="w-20 h-20 bg-white/20 backdrop-blur-lg rounded-full flex items-center justify-center text-white text-3xl font-bold ring-4 ring-white/30 overflow-hidden">
-              {user?.profile_image_url ? (
+              {user?.profileImageUrl ? (
                 <img
-                  src={user.profile_image_url}
+                  src={user.profileImageUrl}
                   alt="Profile"
                   className="w-full h-full object-cover"
                 />
@@ -474,7 +474,7 @@ export default function MyPageScreen({ locale }: MyPageScreenProps) {
               ))}
             </div>
           ) : (
-            <span className="text-sm font-semibold text-gray-900">{getAgeGroupText(user?.age_group)}</span>
+            <span className="text-sm font-semibold text-gray-900">{getAgeGroupText(user?.ageGroup)}</span>
           )}
         </div>
 
@@ -535,7 +535,7 @@ export default function MyPageScreen({ locale }: MyPageScreenProps) {
             <button
               onClick={() => {
                 setIsEditingProfile(false);
-                setAgeGroup(user?.age_group || null);
+                setAgeGroup(user?.ageGroup || null);
                 setGender(user?.gender || '');
               }}
               disabled={isSaving}

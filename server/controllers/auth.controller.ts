@@ -33,6 +33,26 @@ function generateRefreshToken(userId: number): string {
 }
 
 /**
+ * 유저 정보를 일관된 형식으로 포맷팅
+ */
+function formatUserInfo(user: any, points?: number) {
+  return {
+    userId: user.id,
+    email: user.email,
+    name: user.name,
+    nickname: user.nickname,
+    bio: user.bio,
+    profileImageUrl: user.profile_image_url,
+    provider: user.provider,
+    ageGroup: user.age_group,
+    gender: user.gender,
+    country: user.country,
+    degree: user.degree,
+    ...(points !== undefined && { points }),
+  };
+}
+
+/**
  * 소셜 로그인 (Google, Kakao, LINE, Apple)
  */
 export async function socialLogin(req: Request, res: Response) {
@@ -149,19 +169,7 @@ export async function socialLogin(req: Request, res: Response) {
     return res.status(isNewUser ? 201 : 200).json({
       message: isNewUser ? 'Registration successful' : 'Login successful',
       data: {
-        userInfo: {
-          userId: user.id,
-          email: user.email,
-          name: user.name,
-          nickname: user.nickname,
-          bio: user.bio,
-          profile_image_url: user.profile_image_url,
-          provider: user.provider,
-          age_group: user.age_group,
-          gender: user.gender,
-          degree: user.degree,
-          points: userPoints,
-        },
+        userInfo: formatUserInfo(user, userPoints),
       },
     });
   } catch (error) {
@@ -249,17 +257,7 @@ export async function emailRegister(req: Request, res: Response) {
     return res.status(201).json({
       message: 'Registration successful',
       data: {
-        userInfo: {
-          userId: user.id,
-          email: user.email,
-          nickname: user.nickname,
-          profile_image_url: user.profile_image_url,
-          provider: user.provider,
-          age_group: user.age_group,
-          gender: user.gender,
-          degree: user.degree,
-          points: userPoints,
-        },
+        userInfo: formatUserInfo(user, userPoints),
       },
     });
   } catch (error) {
@@ -337,17 +335,7 @@ export async function emailLogin(req: Request, res: Response) {
     return res.json({
       message: 'Login successful',
       data: {
-        userInfo: {
-          userId: user.id,
-          email: user.email,
-          nickname: user.nickname,
-          profile_image_url: user.profile_image_url,
-          provider: user.provider,
-          age_group: user.age_group,
-          gender: user.gender,
-          degree: user.degree,
-          points: userPoints,
-        },
+        userInfo: formatUserInfo(user, userPoints),
       },
     });
   } catch (error) {
@@ -433,19 +421,7 @@ export async function getCurrentUser(req: Request, res: Response) {
     return res.json({
       message: 'User retrieved successfully',
       data: {
-        userInfo: {
-          userId: user.id,
-          email: user.email,
-          name: user.name,
-          nickname: user.nickname,
-          bio: user.bio,
-          profile_image_url: user.profile_image_url,
-          provider: user.provider,
-          age_group: user.age_group,
-          gender: user.gender,
-          degree: user.degree,
-          points: userPoints,
-        },
+        userInfo: formatUserInfo(user, userPoints),
       },
     });
   } catch (error) {
@@ -523,7 +499,7 @@ export async function updateNickname(req: Request, res: Response) {
         nickname: user.nickname,
         bio: user.bio,
         provider: user.provider,
-        age_group: user.age_group,
+        ageGroup: user.age_group,
         gender: user.gender,
         degree: user.degree,
         created_at: user.created_at,
@@ -590,17 +566,7 @@ export async function updateProfile(req: Request, res: Response) {
     return res.json({
       message: 'Profile updated successfully',
       data: {
-        userInfo: {
-          userId: user.id,
-          email: user.email,
-          name: user.name,
-          nickname: user.nickname,
-          provider: user.provider,
-          age_group: user.age_group,
-          gender: user.gender,
-          country: user.country,
-          degree: user.degree,
-        },
+        userInfo: formatUserInfo(user),
       },
     });
   } catch (error) {

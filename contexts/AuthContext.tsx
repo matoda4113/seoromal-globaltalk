@@ -4,20 +4,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import authService from '@/services/auth.service';
 import logger from '@/lib/logger';
 import { getSocket } from '@/lib/socket';
-
-interface User {
-  userId: number;
-  email: string;
-  name?: string;
-  nickname?: string;
-  bio?: string | null;
-  profile_image_url?: string | null;
-  provider: string;
-  age_group?: number | null;
-  gender?: string | null;
-  degree?: number;
-  points?: number;
-}
+import { User } from '@/types/user';
 
 interface AuthContextType {
   user: User | null;
@@ -52,15 +39,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // Socket.io에 인증 정보 전달
         const socket = getSocket();
-        socket.emit('authenticate', {
-          userId: userInfo.userId,
-          email: userInfo.email,
-          nickname: userInfo.nickname || userInfo.email,
-          profile_image_url: userInfo.profile_image_url || null,
-          age_group: userInfo.age_group || null,
-          gender: userInfo.gender || null,
-        });
-        logger.info('1Socket authenticated with user:', userInfo);
+        socket.emit('authenticate', userInfo);
+        logger.info('Socket authenticated with user:', userInfo);
       } else {
         logger.warn('Invalid response structure from getCurrentUser', response);
         setUser(null);
@@ -84,15 +64,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Socket.io에 인증 정보 전달
     const socket = getSocket();
-    socket.emit('authenticate', {
-      userId: userData.userId,
-      email: userData.email,
-      nickname: userData.nickname || userData.email,
-      profile_image_url: userData.profile_image_url,
-      age_group: userData.age_group,
-      gender: userData.gender,
-    });
-    logger.info('2Socket authenticated with user:', userData);
+    socket.emit('authenticate', userData);
+    logger.info('Socket authenticated with user:', userData);
   };
 
   const logout = async () => {

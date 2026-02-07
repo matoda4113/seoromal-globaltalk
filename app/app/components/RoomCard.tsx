@@ -6,6 +6,8 @@ interface RoomCardProps {
   participantsText: string;
   languageText: string;
   topicText: string;
+  onJoin: (roomId: string) => void;
+  currentUserId?: number | null; // 현재 로그인한 사용자 ID
 }
 
 export default function RoomCard({
@@ -14,7 +16,12 @@ export default function RoomCard({
   participantsText,
   languageText,
   topicText,
+  onJoin,
+  currentUserId,
 }: RoomCardProps) {
+  // 이미 참가 중인지 확인
+  const isAlreadyJoined = room.participants.some(p => p.userId === currentUserId);
+  const isFull = room.participants.length >= room.maxParticipants;
   return (
     <div className="bg-white p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow border border-gray-200">
       {/* Room Title */}
@@ -76,8 +83,12 @@ export default function RoomCard({
         <div className="text-xs text-gray-600">
           {room.participants.length}/{room.maxParticipants} {participantsText}
         </div>
-        <button className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-700 transition-colors active:scale-95 min-h-[40px]">
-          {joinText}
+        <button
+          onClick={() => onJoin(room.id)}
+          disabled={isFull || isAlreadyJoined}
+          className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-700 transition-colors active:scale-95 min-h-[40px] disabled:bg-gray-400 disabled:cursor-not-allowed"
+        >
+          {isAlreadyJoined ? '참가 중' : joinText}
         </button>
       </div>
     </div>

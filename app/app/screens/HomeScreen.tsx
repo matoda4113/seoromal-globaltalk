@@ -26,6 +26,8 @@ interface HomeScreenProps {
     isPrivate: boolean;
     password?: string;
   }) => void;
+  onJoinRoom: (roomId: string) => void;
+  currentUserId?: number | null;
 }
 
 export default function HomeScreen({
@@ -34,6 +36,8 @@ export default function HomeScreen({
   t,
   locale,
   onCreateRoom,
+  onJoinRoom,
+  currentUserId,
 }: HomeScreenProps) {
   const [languageFilter, setLanguageFilter] = useState<string>('all');
   const [topicFilter, setTopicFilter] = useState<string>('all');
@@ -131,6 +135,8 @@ export default function HomeScreen({
               participantsText={t.app.participants}
               languageText={t.app.filters[room.language as keyof typeof t.app.filters] as string}
               topicText={t.app.filters[room.topic as keyof typeof t.app.filters] as string}
+              onJoin={onJoinRoom}
+              currentUserId={currentUserId}
             />
           ))}
         </div>

@@ -6,20 +6,22 @@ import { getTranslations, type Locale } from '@/lib/i18n';
 import { resolveLocale, setStoredLocale } from '@/lib/locale-storage';
 import BottomNav, { type TabType } from '@/components/BottomNav';
 import { useSocket, type Room } from '@/hooks/useSocket';
-import RoomModal from '@/components/RoomModal';
+import RoomModal from './components/RoomModal';
 import HomeScreen from './screens/HomeScreen';
 import CommunityScreen from './screens/CommunityScreen';
 import MyPageScreen from './screens/MyPageScreen';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function AppPage() {
   const searchParams = useSearchParams();
+  const { user } = useAuth();
   const [locale, setLocale] = useState<Locale>('en');
   const [activeTab, setActiveTab] = useState<TabType>('home');
   const [isRoomModalOpen, setIsRoomModalOpen] = useState(false);
   const [currentRoomForModal, setCurrentRoomForModal] = useState<Room | null>(null);
 
   // Socket 연결 및 방 목록 가져오기
-  const { rooms, isConnected, onlineCount, createRoom, currentRoom, leaveRoom } = useSocket();
+  const { rooms, isConnected, onlineCount, createRoom, currentRoom, leaveRoom, joinRoom, messages, sendMessage } = useSocket();
 
   useEffect(() => {
     const langParam = searchParams.get('lang');
@@ -41,6 +43,10 @@ export default function AppPage() {
       setIsRoomModalOpen(true);
     } else {
       // currentRoom이 null이 되면 모달 닫기
+      // history state 정리 (강제 종료 시)
+      if (typeof window !== 'undefined' && window.history.state?.modal === 'room') {
+        window.history.replaceState(null, '', '/app');
+      }
       setIsRoomModalOpen(false);
       setCurrentRoomForModal(null);
     }
@@ -125,6 +131,8 @@ export default function AppPage() {
             t={t}
             locale={locale}
             onCreateRoom={handleCreateRoom}
+            onJoinRoom={joinRoom}
+            currentUserId={user?.userId}
           />
         )}
 
@@ -154,6 +162,8 @@ export default function AppPage() {
           onLeave={leaveRoom}
           room={currentRoomForModal}
           locale={locale}
+          messages={messages}
+          onSendMessage={sendMessage}
         />
       )}
     </div>

@@ -1,21 +1,8 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import logger from "@/lib/logger";
+import type { User, AnonymousUser } from '@/types/user';
 
-// 사용자 타입 정의
-interface AuthenticatedUser {
-  socketId: string;
-  userId: number;
-  email: string;
-  nickname: string;
-  profileImageUrl?: string | null;
-  ageGroup?: number | null;
-  gender?: string | null;
-}
-
-interface AnonymousUser {
-  socketId: string;
-  connectedAt: Date;
-}
+// 사용자 타입은 types/user.ts에서 import
 
 // 참가자 정보 타입
 interface Participant {
@@ -48,7 +35,7 @@ interface Room {
 
 export function initializeSocketHandlers(io: SocketIOServer) {
   // 연결된 사용자 관리
-  const authenticatedUsers = new Map<number, AuthenticatedUser>(); // userId -> user (중복 제거됨)
+  const authenticatedUsers = new Map<number, User>(); // userId -> user (socketId 포함, 중복 제거됨)
   const userSocketIds = new Map<string, number>(); // socketId -> userId (disconnect 시 필요)
   const anonymousUsers = new Map<string, AnonymousUser>(); // socketId -> anonymous
 
@@ -59,15 +46,8 @@ export function initializeSocketHandlers(io: SocketIOServer) {
   function broadcastOnlineCount() {
     const totalOnline = authenticatedUsers.size + anonymousUsers.size;
 
-    // 로그인한 사용자 목록 (닉네임, 프로필 이미지 포함)
-    // authenticatedUsers는 이미 userId를 키로 사용하므로 중복 없음
-    const authenticatedUserList = Array.from(authenticatedUsers.values()).map(user => ({
-      userId: user.userId,
-      nickname: user.nickname,
-      profileImageUrl: user.profileImageUrl,
-      ageGroup: user.ageGroup,
-      gender: user.gender,
-    }));
+    // 로그인한 사용자 목록 (이미 userId를 키로 사용하므로 중복 없음)
+    const authenticatedUserList = Array.from(authenticatedUsers.values());
 
     io.emit('onlineCount', {
       total: totalOnline,
@@ -84,6 +64,49 @@ export function initializeSocketHandlers(io: SocketIOServer) {
     };
   }
 
+  // TODO: 정산 처리 함수 (나중에 구현)
+  function processSettlement(
+    room: Room,
+    participant: Participant,
+    sessionDurationSeconds: number
+  ) {
+    const isHost = participant.isHost;
+    const isGuest = !isHost;
+
+    if (isGuest) {
+      // 게스트 정산 로직
+      if (sessionDurationSeconds <= 15) {
+        logger.log(`💰 Guest ${participant.nickname} - No settlement (session <= 15 seconds)`);
+        // TODO: 15초 이하 - 정산 안 함
+        return;
+      }
+
+      // 15초 이상 - 기본 10분 요금 차감
+      const baseMinutes = 10;
+      const pointsPerMinute = room.callType === 'audio' ? 1 : 4;
+      const guestCharge = baseMinutes * pointsPerMinute;
+
+      logger.log(`💰 Guest ${participant.nickname} - Charge: ${guestCharge} points (${room.callType})`);
+      // TODO: 게스트 포인트 차감 로직 (음성: 10포인트, 화상: 40포인트)
+    }
+
+    if (isHost) {
+      // 호스트 정산 로직 - 실제 통화 시간만큼만 지급
+      const actualMinutes = Math.floor(sessionDurationSeconds / 60);
+      const pointsPerMinute = room.callType === 'audio' ? 1 : 4;
+      const hostEarnings = actualMinutes * pointsPerMinute;
+
+      logger.log(`💰 Host ${participant.nickname} - Earnings: ${hostEarnings} points (${actualMinutes} minutes, ${room.callType})`);
+      // TODO: 호스트 포인트 지급 로직
+    }
+  }
+
+  // TODO: 호스트 조기 퇴장 패널티 처리 (나중에 구현)
+  function applyHostPenalty(host: Participant, room: Room) {
+    logger.log(`⚠️ Host ${host.nickname} - Early exit penalty applied`);
+    // TODO: 호스트 패널티 부여 로직 (정산 작동 안 함 + 포인트 차감)
+  }
+
   // 사용자가 방을 나갈 때 처리 (leaveRoom, disconnect 공통 로직)
   function handleUserLeaveRoom(
     socketId: string,
@@ -96,24 +119,58 @@ export function initializeSocketHandlers(io: SocketIOServer) {
         const participant = room.participants[participantIndex];
         const isHost = participant.isHost;
 
+        // 세션 시간 계산
+        const sessionDurationSeconds = room.sessionStartedAt
+          ? Math.floor((Date.now() - new Date(room.sessionStartedAt).getTime()) / 1000)
+          : 0;
+
+        // 10분 이상 통화했는지 체크
+        const isTenMinutesOrMore = sessionDurationSeconds >= 600;
+
         if (isHost) {
           // 호스트가 나감 - 방 삭제
           logger.log(`🗑️ Room deleted: ${room.title} (host ${reason})`);
 
+          // TODO: 호스트 조기 퇴장 패널티 체크
+          const hasGuest = room.participants.length > 1;
+          if (hasGuest && !isTenMinutesOrMore && room.sessionStartedAt) {
+            // 10분 미만 + 게스트 있음 - 패널티 부여
+            applyHostPenalty(participant, room);
+          } else if (hasGuest && room.sessionStartedAt) {
+            // 정상 종료 - 호스트 정산 처리
+            processSettlement(room, participant, sessionDurationSeconds);
+          }
+
+          // 모든 게스트에게 방 종료 알림
           room.participants.forEach((p) => {
-            io.to(p.socketId).emit('roomClosed', {
-              roomId: room.id,
-              reason: reason === 'left' ? 'host_left' : 'host_disconnected',
-              message: reason === 'left'
-                ? '호스트가 방을 나가 세션이 종료되었습니다.'
-                : '호스트의 연결이 끊어져 세션이 종료되었습니다.',
-            });
+            if (!p.isHost) {
+              // 게스트 정산 처리
+              if (room.sessionStartedAt) {
+                processSettlement(room, p, sessionDurationSeconds);
+              }
+
+              // TODO: 10분 이상 통화 시 평가 모달 표시
+              io.to(p.socketId).emit('roomClosed', {
+                roomId: room.id,
+                reason: reason === 'left' ? 'host_left' : 'host_disconnected',
+                message: reason === 'left'
+                  ? '호스트가 방을 나가 세션이 종료되었습니다.'
+                  : '호스트의 연결이 끊어져 세션이 종료되었습니다.',
+                showRatingModal: isTenMinutesOrMore, // 평가 모달 표시 여부
+              });
+            }
           });
 
           rooms.delete(roomId);
           io.emit('roomDeleted', roomId);
         } else {
           // 게스트가 나감 - 참가자 목록에서 제거
+
+          // 게스트 정산 처리
+          if (room.sessionStartedAt) {
+            processSettlement(room, participant, sessionDurationSeconds);
+          }
+
           room.participants.splice(participantIndex, 1);
           room.sessionStartedAt = undefined;
           logger.log(`👋 ${participant.nickname} ${reason} room: ${room.title}`);
@@ -125,6 +182,12 @@ export function initializeSocketHandlers(io: SocketIOServer) {
           });
 
           io.emit('roomListUpdated', serializeRoom(room));
+
+          // TODO: 게스트가 10분 이상 통화 후 나갈 때 평가 모달
+          if (isTenMinutesOrMore) {
+            logger.log(`⭐ Guest ${participant.nickname} can rate the host`);
+            // TODO: 게스트 소켓에 평가 모달 표시 이벤트 전송
+          }
         }
 
         return { roomId, wasHost: isHost };
@@ -150,14 +213,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
 
 
     // 사용자 인증 (로그인한 경우)
-    socket.on('authenticate', (data: {
-      userId: number;
-      email: string;
-      nickname: string;
-      profileImageUrl?: string | null;
-      ageGroup?: number | null;
-      gender?: string | null;
-    }) => {
+    socket.on('authenticate', (data: User) => {
       if (data.userId && data.email && data.nickname) {
         // 익명 → 인증 전환
         if (anonymousUsers.has(socket.id)) {
@@ -167,13 +223,8 @@ export function initializeSocketHandlers(io: SocketIOServer) {
 
         // 로그인한 사용자로 등록 (userId를 키로 사용 -> 중복 제거됨)
         authenticatedUsers.set(data.userId, {
-          socketId: socket.id,
-          userId: data.userId,
-          email: data.email,
-          nickname: data.nickname,
-          profileImageUrl: data.profileImageUrl,
-          ageGroup: data.ageGroup,
-          gender: data.gender,
+          ...data,
+          socketId: socket.id, // socketId 추가
         });
         userSocketIds.set(socket.id, data.userId);
         logger.log(`🔐 Authenticated user: ${data.nickname} (userId: ${data.userId}, socketId: ${socket.id}) - age: ${data.ageGroup}, gender: ${data.gender}`);
@@ -251,7 +302,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
         id: `room_${Date.now()}_${Math.random().toString(36).substring(7)}`,
         title: data.title,
         hostId: user.userId,
-        hostNickname: user.nickname,
+        hostNickname: user.nickname??"host",
         hostProfileImage: user.profileImageUrl,
         language: data.language,
         topic: data.topic,
@@ -262,12 +313,12 @@ export function initializeSocketHandlers(io: SocketIOServer) {
         participants: [
           {
             userId: user.userId,
-            nickname: user.nickname,
+            nickname: user.nickname??"user",
             profileImageUrl: user.profileImageUrl,
             socketId: socket.id,
             isHost: true,
             ageGroup: user.ageGroup,
-            gender :user.gender,
+            gender: user.gender,
           },
         ],
         createdAt: new Date().toISOString(),
@@ -281,7 +332,10 @@ export function initializeSocketHandlers(io: SocketIOServer) {
       socket.emit('roomCreated', { roomId: room.id });
 
       // 호스트를 방에 자동으로 입장시킴
-      socket.emit('roomJoined', serializeRoom(room));
+      socket.emit('roomJoined', {
+        ...serializeRoom(room),
+        agoraAppId: process.env.NEXT_PUBLIC_AGORA_APP_ID || '',
+      });
       logger.log(`👋 Host auto-joined room: ${room.title}`);
 
       // 모든 클라이언트에게 새 방 알림
@@ -299,9 +353,9 @@ export function initializeSocketHandlers(io: SocketIOServer) {
         return;
       }
 
-      // 이미 다른 방에 참가 중인지 체크
+      // 이미 다른 방에 참가 중인지 체크 (socketId 또는 userId로 확인)
       for (const [roomId, existingRoom] of rooms.entries()) {
-        if (existingRoom.participants.some((p) => p.socketId === socket.id)) {
+        if (existingRoom.participants.some((p) => p.socketId === socket.id || p.userId === authUser.userId)) {
           socket.emit('error', { message: '이미 다른 방에 참가 중입니다.' });
           return;
         }
@@ -320,13 +374,16 @@ export function initializeSocketHandlers(io: SocketIOServer) {
         return;
       }
 
+      // 호스트 여부 확인 (방을 만든 사람인지)
+      const isHost = room.hostId === authUser.userId;
+
       // 참가자 추가
       const newParticipant: Participant = {
         userId: authUser?.userId || null,
         nickname: authUser?.nickname || data.nickname || 'Guest',
         profileImageUrl: authUser?.profileImageUrl || null,
         socketId: socket.id,
-        isHost: false,
+        isHost: isHost,
         ageGroup: authUser?.ageGroup || null,
         gender: authUser?.gender || null
 
@@ -337,7 +394,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
       logger.log(`👥 현재 참가자 목록 (${room.participants.length}/${room.maxParticipants}):`);
 
       // 2명이 모였으면 세션 시작
-      if (room.participants.length === 2 && !room.sessionStartedAt) {
+      if (room.participants.length === 2) {
         room.sessionStartedAt = new Date();
         logger.log(`🎤 세션 시작: ${room.title} (${room.callType})`);
       }
@@ -345,7 +402,10 @@ export function initializeSocketHandlers(io: SocketIOServer) {
       rooms.set(room.id, room);
 
       // 입장한 사용자에게 방 정보 전송
-      socket.emit('roomJoined', serializeRoom(room));
+      socket.emit('roomJoined', {
+        ...serializeRoom(room),
+        agoraAppId: process.env.NEXT_PUBLIC_AGORA_APP_ID || '',
+      });
 
       // 방의 모든 참가자에게 업데이트 알림
       room.participants.forEach((p) => {
@@ -358,6 +418,20 @@ export function initializeSocketHandlers(io: SocketIOServer) {
 
     // 방 나가기
     socket.on('leaveRoom', (data: { roomId: string }) => {
+      // 공통 로직 호출
+      const result = handleUserLeaveRoom(socket.id, 'left');
+
+      // 나간 사용자에게 성공 응답
+      if (result) {
+        socket.emit('roomLeft', { roomId: result.roomId });
+      } else {
+        // 참가 중인 방이 없는 경우 (이미 나갔거나 참가한 적 없음)
+        socket.emit('error', { message: '방에 참가하지 않았습니다.' });
+      }
+    });
+
+    // 채팅 메시지 전송
+    socket.on('sendMessage', (data: { roomId: string; message: string; type?: 'text' | 'stt' }) => {
       const room = rooms.get(data.roomId);
 
       if (!room) {
@@ -365,23 +439,33 @@ export function initializeSocketHandlers(io: SocketIOServer) {
         return;
       }
 
-      const participantIndex = room.participants.findIndex((p) => p.socketId === socket.id);
+      // 보낸 사람 정보 찾기
+      const sender = room.participants.find((p) => p.socketId === socket.id);
 
-      if (participantIndex === -1) {
+      if (!sender) {
         socket.emit('error', { message: '방에 참가하지 않았습니다.' });
         return;
       }
 
-      // 공통 로직 호출
-      const result = handleUserLeaveRoom(socket.id, 'left');
+      // 메시지 객체 생성
+      const messageData = {
+        id: `msg_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+        roomId: data.roomId,
+        senderId: sender.userId,
+        senderNickname: sender.nickname,
+        senderProfileImage: sender.profileImageUrl,
+        message: data.message,
+        timestamp: new Date().toISOString(),
+        type: data.type || 'text', // 메시지 타입: text(수동) 또는 stt(음성인식)
+      };
 
-      // 나간 사용자에게 성공 응답
-      if (result) {
-        socket.emit('roomLeft', { roomId: result.roomId });
-      }
+      logger.log(`💬 Message from ${sender.nickname} in room ${room.title}: ${data.message} (${messageData.type})`);
+
+      // 방의 모든 참가자에게 메시지 브로드캐스트
+      room.participants.forEach((p) => {
+        io.to(p.socketId).emit('newMessage', messageData);
+      });
     });
-
-
 
     // 연결 해제
     socket.on('disconnect', () => {

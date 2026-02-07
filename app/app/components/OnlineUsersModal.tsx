@@ -1,15 +1,9 @@
-interface AuthenticatedUser {
-  userId: number;
-  nickname: string;
-  profile_image_url?: string | null;
-  age_group?: number | null;
-  gender?: string | null;
-}
+import { User } from '@/types/user';
 
 interface OnlineUsersModalProps {
   isOpen: boolean;
   onClose: () => void;
-  authenticatedUsers: AuthenticatedUser[];
+  authenticatedUsers: User[];
   anonymousCount: number;
   locale: 'ko' | 'en' | 'ja';
 }
@@ -113,21 +107,21 @@ export default function OnlineUsersModal({
                         className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
                       >
                         <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm overflow-hidden">
-                          {user.profile_image_url ? (
+                          {user.profileImageUrl ? (
                             <img
-                              src={user.profile_image_url}
-                              alt={user.nickname}
+                              src={user.profileImageUrl}
+                              alt={user.nickname || 'User'}
                               className="w-full h-full object-cover"
                             />
                           ) : (
-                            user.nickname[0].toUpperCase()
+                            user.nickname?.[0]?.toUpperCase() || 'U'
                           )}
                         </div>
                         <div className="flex-1">
                           <p className="font-semibold text-gray-900">{user.nickname}</p>
-                          {(user.age_group || user.gender) && (
+                          {(user.ageGroup || user.gender) && (
                             <p className="text-xs text-gray-600">
-                              {[getAgeGroupText(user.age_group), getGenderText(user.gender)]
+                              {[getAgeGroupText(user.ageGroup), getGenderText(user.gender)]
                                 .filter(Boolean)
                                 .join(' · ')}
                             </p>

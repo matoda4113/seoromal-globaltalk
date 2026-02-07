@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getSocket } from '@/lib/socket';
 import logger from '@/lib/logger';
+import { OnlineCount } from '@/types/user';
 
 interface Participant {
 
@@ -29,23 +30,18 @@ export interface Room {
   participants: Participant[];
   createdAt: string; // 최초 방생성 타임
   sessionStartedAt?: Date; // 대화 시작시간
+  agoraAppId?: string; // Agora App ID
 }
 
-interface AuthenticatedUser {
-  socketId: string;
-  userId: number;
-  email: string;
-  nickname: string;
-  profileImageUrl?: string | null;
-  ageGroup?: number | null;
-  gender?: string | null;
-}
-
-interface OnlineCount {
-  total: number;
-  authenticated: number;
-  anonymous: number;
-  authenticatedUsers: AuthenticatedUser[];
+export interface ChatMessage {
+  id: string;
+  roomId: string;
+  senderId: number | null;
+  senderNickname: string;
+  senderProfileImage?: string | null;
+  message: string;
+  timestamp: string;
+  type?: 'text' | 'stt'; // 메시지 타입: text(수동 입력), stt(음성 인식)
 }
 
 export function useSocket() {
@@ -58,6 +54,7 @@ export function useSocket() {
   });
   const [currentRoom, setCurrentRoom] = useState<Room | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]); // 채팅 메시지
 
   useEffect(() => {
     const socket = getSocket();
@@ -118,17 +115,26 @@ export function useSocket() {
     const handleRoomJoined = (room: Room) => {
       logger.info('👋 Joined room:', room);
       setCurrentRoom(room);
+      setMessages([]); // 방 입장 시 메시지 초기화
     };
 
     const handleRoomLeft = (data: { roomId: string }) => {
       logger.info('🚪 Left room:', data.roomId);
       setCurrentRoom(null);
+      setMessages([]); // 방 나갈 때 메시지 초기화
     };
 
-    const handleRoomClosed = (data: { roomId: string; reason: string; message: string }) => {
+    const handleRoomClosed = (data: { roomId: string; reason: string; message: string; showRatingModal?: boolean }) => {
       logger.warn('⚠️ Room closed:', data.message);
       alert(data.message);
       setCurrentRoom(null);
+      setMessages([]); // 방 닫힐 때 메시지 초기화
+
+      // TODO: 평가 모달 표시 로직
+      if (data.showRatingModal) {
+        logger.info('⭐ Should show rating modal for host');
+        // TODO: 평가 모달 상태 업데이트
+      }
     };
 
     const handleError = (error: { message: string }) => {
@@ -139,6 +145,16 @@ export function useSocket() {
     const handleOnlineCount = (count: OnlineCount) => {
       logger.debug('📊 Online count:', count);
       setOnlineCount(count);
+    };
+
+    const handleNewMessage = (message: ChatMessage) => {
+      logger.info('💬 New message received:', message);
+      logger.info('💬 Current messages count before:', messages.length);
+      setMessages((prev) => {
+        const newMessages = [...prev, message];
+        logger.info('💬 New messages count after:', newMessages.length);
+        return newMessages;
+      });
     };
 
     // 이벤트 리스너 등록
@@ -154,6 +170,7 @@ export function useSocket() {
     socket.on('roomClosed', handleRoomClosed);
     socket.on('error', handleError);
     socket.on('onlineCount', handleOnlineCount);
+    socket.on('newMessage', handleNewMessage);
 
     // 이미 연결되어 있다면 즉시 방 목록 요청 및 온라인 카운트 요청
     if (socket.connected) {
@@ -178,6 +195,7 @@ export function useSocket() {
       socket.off('roomClosed', handleRoomClosed);
       socket.off('error', handleError);
       socket.off('onlineCount', handleOnlineCount);
+      socket.off('newMessage', handleNewMessage);
     };
   }, [currentRoom]);
 
@@ -219,14 +237,22 @@ export function useSocket() {
     socket.emit('authenticate', data);
   };
 
+  const sendMessage = (roomId: string, message: string, type: 'text' | 'stt' = 'text') => {
+    const socket = getSocket();
+    logger.info('Sending message to room:', roomId, message, 'type:', type);
+    socket.emit('sendMessage', { roomId, message, type });
+  };
+
   return {
     rooms,
     onlineCount,
     currentRoom,
     isConnected,
+    messages,
     joinRoom,
     leaveRoom,
     createRoom,
     authenticate,
+    sendMessage,
   };
 }

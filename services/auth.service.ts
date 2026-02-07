@@ -1,5 +1,6 @@
 import axios from 'axios';
 import logger from '@/lib/logger';
+import { User } from '@/types/user';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -79,77 +80,19 @@ apiClient.interceptors.response.use(
   }
 );
 
-export interface User {
-  id: number;
-  email: string;
-  name?: string;
-  nickname?: string;
-  bio?: string | null;
-  profile_image_url?: string | null;
-  provider: string;
-  age_group?: number | null;
-  gender?: string | null;
-  degree?: number;
-  points?: number;
-  created_at: string;
-}
-
-export interface SocialLoginResponse {
+// API 응답 타입 정의
+export interface AuthResponse {
   message: string;
   data: {
-    userInfo: {
-      userId: number;
-      email: string;
-      name?: string;
-      nickname?: string;
-      bio?: string | null;
-      profile_image_url?: string | null;
-      provider: string;
-      age_group?: number | null;
-      gender?: string | null;
-      country?: string | null;
-      degree?: number;
-      points?: number;
-    };
+    userInfo: User;
   };
   status?: number; // HTTP 상태 코드 (201: 신규가입, 200: 기존 로그인)
 }
 
-export interface EmailRegisterResponse {
-  message: string;
-  data: {
-    userInfo: {
-      userId: number;
-      email: string;
-      nickname: string;
-      profile_image_url?: string | null;
-      provider: string;
-      age_group?: number | null;
-      gender?: string | null;
-      degree?: number;
-      points?: number;
-    };
-  };
-  status?: number; // HTTP 상태 코드 (201: 신규가입)
-}
-
-export interface EmailLoginResponse {
-  message: string;
-  data: {
-    userInfo: {
-      userId: number;
-      email: string;
-      nickname?: string;
-      profile_image_url?: string | null;
-      provider: string;
-      age_group?: number | null;
-      gender?: string | null;
-      degree?: number;
-      points?: number;
-    };
-  };
-  status?: number; // HTTP 상태 코드 (201: 신규가입, 200: 기존 로그인)
-}
+// 모든 로그인/회원가입 응답에 동일하게 사용
+export type SocialLoginResponse = AuthResponse;
+export type EmailRegisterResponse = AuthResponse;
+export type EmailLoginResponse = AuthResponse;
 
 class AuthService {
   /**
@@ -275,12 +218,12 @@ class AuthService {
   /**
    * 닉네임 변경
    */
-  async updateNickname(nickname?: string, bio?: string): Promise<User> {
-    const response = await apiClient.put<{ user: User }>('/auth/update-nickname', {
+  async updateNickname(nickname?: string, bio?: string): Promise<AuthResponse> {
+    const response = await apiClient.put<AuthResponse>('/auth/update-nickname', {
       nickname,
       bio,
     });
-    return response.data.user;
+    return response.data;
   }
 
   /**
@@ -289,9 +232,9 @@ class AuthService {
   async updateProfile(data: {
     age_group?: number | null;
     gender?: string | null;
-  }): Promise<User> {
-    const response = await apiClient.put<{ user: User }>('/auth/update-profile', data);
-    return response.data.user;
+  }): Promise<AuthResponse> {
+    const response = await apiClient.put<AuthResponse>('/auth/update-profile', data);
+    return response.data;
   }
 
   /**
@@ -317,13 +260,13 @@ class AuthService {
    * @param file - webp 형식의 이미지 파일
    * @returns 업로드된 이미지 URL과 업데이트된 사용자 정보
    */
-  async uploadProfileImage(file: File): Promise<{ imageUrl: string; user: User }> {
+  async uploadProfileImage(file: File): Promise<{ imageUrl: string; userInfo: User }> {
     const formData = new FormData();
     formData.append('image', file);
 
     const response = await apiClient.post<{
       message: string;
-      data: { imageUrl: string; user: User };
+      data: { imageUrl: string; userInfo: User };
     }>('/upload/profile-image', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
