@@ -55,6 +55,7 @@ export function useSocket() {
   const [currentRoom, setCurrentRoom] = useState<Room | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]); // 채팅 메시지
+  const [ratingModalData, setRatingModalData] = useState<{ show: boolean; hostUserId?: number } | null>(null);
 
   useEffect(() => {
     const socket = getSocket();
@@ -118,22 +119,30 @@ export function useSocket() {
       setMessages([]); // 방 입장 시 메시지 초기화
     };
 
-    const handleRoomLeft = (data: { roomId: string }) => {
+    const handleRoomLeft = (data: { roomId: string; showRatingModal?: boolean; hostUserId?: number }) => {
       logger.info('🚪 Left room:', data.roomId);
       setCurrentRoom(null);
       setMessages([]); // 방 나갈 때 메시지 초기화
+
+
+      if (data.showRatingModal && data.hostUserId) {
+        logger.info('⭐ Showing rating modal for host:', data.hostUserId);
+        setRatingModalData({ show: true, hostUserId: data.hostUserId });
+      }
     };
 
-    const handleRoomClosed = (data: { roomId: string; reason: string; message: string; showRatingModal?: boolean }) => {
+    const handleRoomClosed = (data: { roomId: string; reason: string; message: string; showRatingModal?: boolean; hostUserId?: number }) => {
       logger.warn('⚠️ Room closed:', data.message);
-      alert(data.message);
+
       setCurrentRoom(null);
       setMessages([]); // 방 닫힐 때 메시지 초기화
 
-      // TODO: 평가 모달 표시 로직
-      if (data.showRatingModal) {
-        logger.info('⭐ Should show rating modal for host');
-        // TODO: 평가 모달 상태 업데이트
+      // 평가 모달 표시 로직
+      if (data.showRatingModal && data.hostUserId) {
+        logger.info('⭐ Showing rating modal for host:', data.hostUserId);
+        setRatingModalData({ show: true, hostUserId: data.hostUserId });
+      } else {
+        alert(data.message);
       }
     };
 
@@ -249,6 +258,8 @@ export function useSocket() {
     currentRoom,
     isConnected,
     messages,
+    ratingModalData,
+    setRatingModalData,
     joinRoom,
     leaveRoom,
     createRoom,

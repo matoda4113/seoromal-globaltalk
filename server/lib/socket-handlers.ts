@@ -1,6 +1,7 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import logger from "@/lib/logger";
 import type { User, AnonymousUser } from '@/types/user';
+import { pool } from './db';
 
 // 사용자 타입은 types/user.ts에서 import
 
@@ -64,20 +65,28 @@ export function initializeSocketHandlers(io: SocketIOServer) {
     };
   }
 
-  // TODO: 정산 처리 함수 (나중에 구현)
-  function processSettlement(
+  // 정산 처리 함수
+  async function processSettlement(
     room: Room,
     participant: Participant,
-    sessionDurationSeconds: number
+    sessionDurationSeconds: number,
+    callId: number
   ) {
     const isHost = participant.isHost;
     const isGuest = !isHost;
 
+    // 로그인 유저가 아니면 정산 안 함
+    if (!participant.userId) {
+      logger.log(`⚠️ 비로그인 유저는 정산 불가: ${participant.nickname}`);
+      return;
+    }
+
     if (isGuest) {
       // 게스트 정산 로직
-      if (sessionDurationSeconds <= 15) {
+      const guestTooShort = sessionDurationSeconds <= 15;
+
+      if (guestTooShort) {
         logger.log(`💰 Guest ${participant.nickname} - No settlement (session <= 15 seconds)`);
-        // TODO: 15초 이하 - 정산 안 함
         return;
       }
 
@@ -86,8 +95,24 @@ export function initializeSocketHandlers(io: SocketIOServer) {
       const pointsPerMinute = room.callType === 'audio' ? 1 : 4;
       const guestCharge = baseMinutes * pointsPerMinute;
 
-      logger.log(`💰 Guest ${participant.nickname} - Charge: ${guestCharge} points (${room.callType})`);
-      // TODO: 게스트 포인트 차감 로직 (음성: 10포인트, 화상: 40포인트)
+      try {
+        // 게스트 포인트 차감 (points 테이블에 INSERT)
+        await pool.query(
+          `INSERT INTO points (user_id, amount, type, reason, reference_type, reference_id)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            participant.userId,
+            -guestCharge, // 음수 (차감)
+            'charge',
+            'call_charge',
+            'call_history',
+            callId
+          ]
+        );
+        logger.log(`💰 Guest ${participant.nickname} - Charged: ${guestCharge} points (${room.callType})`);
+      } catch (error) {
+        logger.error(`❌ 게스트 포인트 차감 실패:`, error);
+      }
     }
 
     if (isHost) {
@@ -96,22 +121,129 @@ export function initializeSocketHandlers(io: SocketIOServer) {
       const pointsPerMinute = room.callType === 'audio' ? 1 : 4;
       const hostEarnings = actualMinutes * pointsPerMinute;
 
-      logger.log(`💰 Host ${participant.nickname} - Earnings: ${hostEarnings} points (${actualMinutes} minutes, ${room.callType})`);
-      // TODO: 호스트 포인트 지급 로직
+      if (hostEarnings > 0) {
+        try {
+          // 호스트 포인트 지급 (points 테이블에 INSERT)
+          await pool.query(
+            `INSERT INTO points (user_id, amount, type, reason, reference_type, reference_id)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [
+              participant.userId,
+              hostEarnings, // 양수 (지급)
+              'earn',
+              'call_earning',
+              'call_history',
+              callId
+            ]
+          );
+          logger.log(`💰 Host ${participant.nickname} - Earned: ${hostEarnings} points (${actualMinutes} minutes, ${room.callType})`);
+        } catch (error) {
+          logger.error(`❌ 호스트 포인트 지급 실패:`, error);
+        }
+      } else {
+        logger.log(`💰 Host ${participant.nickname} - No earnings (통화 시간 1분 미만)`);
+      }
     }
   }
 
-  // TODO: 호스트 조기 퇴장 패널티 처리 (나중에 구현)
-  function applyHostPenalty(host: Participant, room: Room) {
-    logger.log(`⚠️ Host ${host.nickname} - Early exit penalty applied`);
-    // TODO: 호스트 패널티 부여 로직 (정산 작동 안 함 + 포인트 차감)
+  // 호스트 조기 퇴장 패널티 처리
+  async function applyHostPenalty(host: Participant, callId: number) {
+    if (!host.userId) {
+      logger.log(`⚠️ 비로그인 호스트는 패널티 불가: ${host.nickname}`);
+      return;
+    }
+
+    // 패널티 포인트 (10분 미만 조기 퇴장)
+    const penaltyPoints = 5;
+
+    try {
+      // 호스트 포인트 차감 (points 테이블에 INSERT)
+      await pool.query(
+        `INSERT INTO points (user_id, amount, type, reason, reference_type, reference_id)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          host.userId,
+          -penaltyPoints, // 음수 (차감)
+          'penalty',
+          'early_exit_penalty',
+          'call_history',
+          callId
+        ]
+      );
+      logger.log(`⚠️ Host ${host.nickname} - Early exit penalty applied: -${penaltyPoints} points`);
+    } catch (error) {
+      logger.error(`❌ 호스트 패널티 부여 실패:`, error);
+    }
+  }
+
+  // call_history 레코드 생성 함수 (call_id 반환)
+  async function createCallHistory(
+    room: Room,
+    host: Participant,
+    guest: Participant | null,
+    sessionDurationSeconds: number,
+    endReason: string,
+    hostEarlyExit: boolean = false,
+    hostPenaltyPoints: number = 0
+  ): Promise<number | null> {
+    // 호스트와 게스트 모두 로그인 유저인 경우만 기록
+    if (!host.userId || !guest?.userId) {
+      logger.log(`⚠️ call_history 기록 건너뛰기 (비로그인 유저 포함)`);
+      return null;
+    }
+
+    const actualMinutes = Math.floor(sessionDurationSeconds / 60);
+    const pointsPerMinute = room.callType === 'audio' ? 1 : 4;
+
+    // 호스트 수익 계산
+    const hostPointsEarned = hostEarlyExit ? 0 : actualMinutes * pointsPerMinute;
+
+    // 게스트 차감 계산
+    const guestTooShort = sessionDurationSeconds <= 15;
+    const baseMinutes = 10;
+    const guestPointsCharged = guestTooShort ? 0 : baseMinutes * pointsPerMinute;
+
+    try {
+      const result = await pool.query(
+        `INSERT INTO call_history (
+          room_id, host_user_id, guest_user_id, call_type, language, topic,
+          started_at, ended_at, duration_seconds,
+          host_points_earned, guest_points_charged,
+          host_early_exit, host_penalty_points, guest_too_short, end_reason
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        RETURNING call_id`,
+        [
+          room.id,
+          host.userId,
+          guest.userId,
+          room.callType,
+          room.language,
+          room.topic,
+          room.sessionStartedAt || new Date(),
+          new Date(),
+          sessionDurationSeconds,
+          hostPointsEarned,
+          guestPointsCharged,
+          hostEarlyExit,
+          hostPenaltyPoints,
+          guestTooShort,
+          endReason,
+        ]
+      );
+      const callId = result.rows[0].call_id;
+      logger.log(`📝 call_history 기록 완료: ${room.id} (${sessionDurationSeconds}초) call_id=${callId}`);
+      return callId;
+    } catch (error) {
+      logger.error(`❌ call_history 기록 실패:`, error);
+      return null;
+    }
   }
 
   // 사용자가 방을 나갈 때 처리 (leaveRoom, disconnect 공통 로직)
-  function handleUserLeaveRoom(
+  async function handleUserLeaveRoom(
     socketId: string,
     reason: 'left' | 'disconnected'
-  ): { roomId: string; wasHost: boolean } | null {
+  ): Promise<{ roomId: string; wasHost: boolean; showRatingModal?: boolean; hostUserId?: number } | null> {
     for (const [roomId, room] of rooms.entries()) {
       const participantIndex = room.participants.findIndex((p) => p.socketId === socketId);
 
@@ -124,51 +256,104 @@ export function initializeSocketHandlers(io: SocketIOServer) {
           ? Math.floor((Date.now() - new Date(room.sessionStartedAt).getTime()) / 1000)
           : 0;
 
-        // 10분 이상 통화했는지 체크
-        const isTenMinutesOrMore = sessionDurationSeconds >= 600;
+        // 10분 이상 통화했는지 체크 (테스트: 5초)
+        const isTenMinutesOrMore = sessionDurationSeconds >= 5;
 
         if (isHost) {
           // 호스트가 나감 - 방 삭제
           logger.log(`🗑️ Room deleted: ${room.title} (host ${reason})`);
 
-          // TODO: 호스트 조기 퇴장 패널티 체크
           const hasGuest = room.participants.length > 1;
-          if (hasGuest && !isTenMinutesOrMore && room.sessionStartedAt) {
-            // 10분 미만 + 게스트 있음 - 패널티 부여
-            applyHostPenalty(participant, room);
-          } else if (hasGuest && room.sessionStartedAt) {
-            // 정상 종료 - 호스트 정산 처리
-            processSettlement(room, participant, sessionDurationSeconds);
-          }
+          const guest = room.participants.find((p) => !p.isHost) || null;
 
-          // 모든 게스트에게 방 종료 알림
-          room.participants.forEach((p) => {
-            if (!p.isHost) {
-              // 게스트 정산 처리
-              if (room.sessionStartedAt) {
-                processSettlement(room, p, sessionDurationSeconds);
+          if (hasGuest && guest && room.sessionStartedAt) {
+            const hostEarlyExit = !isTenMinutesOrMore;
+            const hostPenaltyPoints = hostEarlyExit ? 5 : 0;
+
+            // 1. call_history 먼저 생성 (call_id 받기)
+            const callId = await createCallHistory(
+              room,
+              participant,
+              guest,
+              sessionDurationSeconds,
+              reason === 'left' ? 'host_left' : 'host_disconnected',
+              hostEarlyExit,
+              hostPenaltyPoints
+            );
+
+            // 2. call_id가 있으면 정산 처리
+            if (callId) {
+              if (hostEarlyExit) {
+                // 10분 미만 + 게스트 있음 - 패널티 부여
+                await applyHostPenalty(participant, callId);
+              } else {
+                // 정상 종료 - 호스트 정산 처리
+                await processSettlement(room, participant, sessionDurationSeconds, callId);
               }
 
-              // TODO: 10분 이상 통화 시 평가 모달 표시
-              io.to(p.socketId).emit('roomClosed', {
-                roomId: room.id,
-                reason: reason === 'left' ? 'host_left' : 'host_disconnected',
-                message: reason === 'left'
-                  ? '호스트가 방을 나가 세션이 종료되었습니다.'
-                  : '호스트의 연결이 끊어져 세션이 종료되었습니다.',
-                showRatingModal: isTenMinutesOrMore, // 평가 모달 표시 여부
-              });
+              // 게스트 정산 처리
+              await processSettlement(room, guest, sessionDurationSeconds, callId);
             }
-          });
+
+            // 게스트에게 방 종료 알림
+            io.to(guest.socketId).emit('roomClosed', {
+              roomId: room.id,
+              reason: reason === 'left' ? 'host_left' : 'host_disconnected',
+              message: reason === 'left'
+                ? '호스트가 방을 나가 세션이 종료되었습니다.'
+                : '호스트의 연결이 끊어져 세션이 종료되었습니다.',
+              // showRatingModal: isTenMinutesOrMore,
+              showRatingModal: true,
+              hostUserId: participant.userId,
+            });
+          }
 
           rooms.delete(roomId);
           io.emit('roomDeleted', roomId);
         } else {
           // 게스트가 나감 - 참가자 목록에서 제거
+          const host = room.participants.find((p) => p.isHost);
 
-          // 게스트 정산 처리
-          if (room.sessionStartedAt) {
-            processSettlement(room, participant, sessionDurationSeconds);
+          if (room.sessionStartedAt && host) {
+            // 1. call_history 먼저 생성 (call_id 받기)
+            const callId = await createCallHistory(
+              room,
+              host,
+              participant,
+              sessionDurationSeconds,
+              reason === 'left' ? 'guest_left' : 'guest_disconnected',
+              false,
+              0
+            );
+
+            // 2. call_id가 있으면 정산 처리
+            if (callId) {
+              // 게스트 정산 처리
+              await processSettlement(room, participant, sessionDurationSeconds, callId);
+
+              // 호스트 정산 처리
+              await processSettlement(room, host, sessionDurationSeconds, callId);
+            }
+
+            // 게스트가 10분 이상 통화 후 나갈 때 평가 모달
+            if (isTenMinutesOrMore && host.userId) {
+              logger.log(`⭐ Guest ${participant.nickname} can rate the host`);
+
+              room.participants.splice(participantIndex, 1);
+              room.sessionStartedAt = undefined;
+              logger.log(`👋 ${participant.nickname} ${reason} room: ${room.title}`);
+
+              rooms.set(roomId, room);
+
+              room.participants.forEach((p) => {
+                io.to(p.socketId).emit('roomUpdated', serializeRoom(room));
+              });
+
+              io.emit('roomListUpdated', serializeRoom(room));
+
+              // 평가 모달 정보 반환
+              return { roomId, wasHost: isHost, showRatingModal: true, hostUserId: host.userId };
+            }
           }
 
           room.participants.splice(participantIndex, 1);
@@ -182,12 +367,6 @@ export function initializeSocketHandlers(io: SocketIOServer) {
           });
 
           io.emit('roomListUpdated', serializeRoom(room));
-
-          // TODO: 게스트가 10분 이상 통화 후 나갈 때 평가 모달
-          if (isTenMinutesOrMore) {
-            logger.log(`⭐ Guest ${participant.nickname} can rate the host`);
-            // TODO: 게스트 소켓에 평가 모달 표시 이벤트 전송
-          }
         }
 
         return { roomId, wasHost: isHost };
@@ -417,13 +596,18 @@ export function initializeSocketHandlers(io: SocketIOServer) {
     });
 
     // 방 나가기
-    socket.on('leaveRoom', (data: { roomId: string }) => {
+    socket.on('leaveRoom', async (data: { roomId: string }) => {
+      console.log(`리절트  :!!}`);
       // 공통 로직 호출
-      const result = handleUserLeaveRoom(socket.id, 'left');
+      const result = await handleUserLeaveRoom(socket.id, 'left');
 
       // 나간 사용자에게 성공 응답
       if (result) {
-        socket.emit('roomLeft', { roomId: result.roomId });
+        socket.emit('roomLeft', {
+          roomId: result.roomId,
+          showRatingModal: result.showRatingModal,
+          hostUserId: result.hostUserId,
+        });
       } else {
         // 참가 중인 방이 없는 경우 (이미 나갔거나 참가한 적 없음)
         socket.emit('error', { message: '방에 참가하지 않았습니다.' });
@@ -468,7 +652,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
     });
 
     // 연결 해제
-    socket.on('disconnect', () => {
+    socket.on('disconnect', async () => {
       const userId = userSocketIds.get(socket.id);
       const authUser = userId ? authenticatedUsers.get(userId) : null;
       const anonUser = anonymousUsers.get(socket.id);
@@ -483,7 +667,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
       }
 
       // 참가 중인 방에서 제거 (공통 로직 호출)
-      handleUserLeaveRoom(socket.id, 'disconnected');
+      await handleUserLeaveRoom(socket.id, 'disconnected');
 
       logger.log(`📊 Total: ${authenticatedUsers.size} authenticated, ${anonymousUsers.size} anonymous`);
 

@@ -375,23 +375,27 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, locale, mess
         : 0;
       const isTenMinutesOrMore = sessionDuration >= 600; // 10분 = 600초
 
-      let warningMessage = '';
-
+      // 게스트가 없으면 경고 없이 바로 나가기
       if (!hasGuest) {
-        // 상대방이 없는 경우 - 패널티 없음
-        warningMessage = '상대방이 없습니다. 방을 나가시겠습니까?';
-      } else if (isTenMinutesOrMore) {
-        // 10분 이상 통화한 경우 - 패널티 없음
-        warningMessage = '방을 나가면 대화가 종료됩니다. 나가시겠습니까?';
+        logger.log('👤 혼자 있음 - 경고 없이 방 나가기');
+        // 경고 없이 바로 진행
       } else {
-        // 10분 미만 통화 중 나가는 경우 - 패널티 있음
-        warningMessage = '⚠️ 경고: 10분 미만 통화 종료 시 패널티가 부여됩니다.\n\n정말 방을 나가시겠습니까?';
-      }
+        // 게스트가 있을 때만 경고
+        let warningMessage = '';
 
-      // 경고 메시지 표시
-      const confirmLeave = window.confirm(warningMessage);
-      if (!confirmLeave) {
-        return; // 취소하면 그냥 리턴
+        if (isTenMinutesOrMore) {
+          // 10분 이상 통화한 경우 - 패널티 없음
+          warningMessage = '방을 나가면 대화가 종료됩니다. 나가시겠습니까?';
+        } else {
+          // 10분 미만 통화 중 나가는 경우 - 패널티 있음
+          warningMessage = '⚠️ 경고: 10분 미만 통화 종료 시 패널티가 부여됩니다.\n\n정말 방을 나가시겠습니까?';
+        }
+
+        // 경고 메시지 표시
+        const confirmLeave = window.confirm(warningMessage);
+        if (!confirmLeave) {
+          return; // 취소하면 그냥 리턴
+        }
       }
     }
 

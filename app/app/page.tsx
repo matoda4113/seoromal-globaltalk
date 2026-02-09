@@ -7,10 +7,12 @@ import { resolveLocale, setStoredLocale } from '@/lib/locale-storage';
 import BottomNav, { type TabType } from '@/components/BottomNav';
 import { useSocket, type Room } from '@/hooks/useSocket';
 import RoomModal from './components/RoomModal';
+import RatingModal from '@/components/RatingModal';
 import HomeScreen from './screens/HomeScreen';
 import CommunityScreen from './screens/CommunityScreen';
 import MyPageScreen from './screens/MyPageScreen';
 import { useAuth } from '@/contexts/AuthContext';
+import logger from '@/lib/logger';
 
 export default function AppPage() {
   const searchParams = useSearchParams();
@@ -21,7 +23,7 @@ export default function AppPage() {
   const [currentRoomForModal, setCurrentRoomForModal] = useState<Room | null>(null);
 
   // Socket 연결 및 방 목록 가져오기
-  const { rooms, isConnected, onlineCount, createRoom, currentRoom, leaveRoom, joinRoom, messages, sendMessage } = useSocket();
+  const { rooms, isConnected, onlineCount, createRoom, currentRoom, leaveRoom, joinRoom, messages, sendMessage, ratingModalData, setRatingModalData } = useSocket();
 
   useEffect(() => {
     const langParam = searchParams.get('lang');
@@ -86,6 +88,41 @@ export default function AppPage() {
       isPrivate: roomData.isPrivate,
       password: roomData.password,
     });
+  };
+
+  const handleRatingSubmit = async (rating: number, comment: string) => {
+    if (!ratingModalData?.hostUserId || !user?.userId) {
+      logger.error('❌ 평가 제출 실패: 호스트 또는 사용자 정보 없음');
+      return;
+    }
+
+    try {
+      // 평가 제출 API 호출
+      const response = await fetch('/api/ratings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ratedUserId: ratingModalData.hostUserId,
+          raterUserId: user.userId,
+          ratingScore: rating,
+          ratingComment: comment || null,
+        }),
+      });
+
+      if (response.ok) {
+        logger.log(`⭐ 평가 제출 성공: ${rating}점`);
+        alert('평가가 제출되었습니다. 감사합니다!');
+      } else {
+        const error = await response.json();
+        logger.error('❌ 평가 제출 실패:', error);
+        alert('평가 제출에 실패했습니다. 다시 시도해주세요.');
+      }
+    } catch (error) {
+      logger.error('❌ 평가 제출 에러:', error);
+      alert('평가 제출 중 오류가 발생했습니다.');
+    }
   };
 
   return (
@@ -164,6 +201,15 @@ export default function AppPage() {
           locale={locale}
           messages={messages}
           onSendMessage={sendMessage}
+        />
+      )}
+
+      {/* Rating Modal (호스트 평가) */}
+      {ratingModalData?.show && ratingModalData.hostUserId && (
+        <RatingModal
+          hostUserId={ratingModalData.hostUserId}
+          onClose={() => setRatingModalData(null)}
+          onSubmit={handleRatingSubmit}
         />
       )}
     </div>
