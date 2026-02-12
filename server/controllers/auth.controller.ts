@@ -8,7 +8,7 @@ import { getUserPoints, addPoints } from '../lib/points';
 
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
-const ACCESS_TOKEN_EXPIRES_IN = '15m'; // Access Token 15분
+const ACCESS_TOKEN_EXPIRES_IN = '1d'; // Access Token 1일
 const REFRESH_TOKEN_EXPIRES_IN = '30d'; // Refresh Token 30일
 
 interface TokenVerificationResult {
@@ -155,7 +155,7 @@ export async function socialLogin(req: Request, res: Response) {
 
     res.cookie('accessToken', accessToken, {
       ...cookieOptions,
-      maxAge: 15 * 60 * 1000, // 15분
+      maxAge: 1 * 24 * 60 * 60 * 1000, // 1일
     });
 
     res.cookie('refreshToken', refreshToken, {

@@ -13,6 +13,7 @@ import CommunityScreen from './screens/CommunityScreen';
 import MyPageScreen from './screens/MyPageScreen';
 import { useAuth } from '@/contexts/AuthContext';
 import logger from '@/lib/logger';
+import ratingsService from '@/services/ratings.service';
 
 export default function AppPage() {
   const searchParams = useSearchParams();
@@ -97,31 +98,20 @@ export default function AppPage() {
     }
 
     try {
-      // 평가 제출 API 호출
-      const response = await fetch('/api/ratings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ratedUserId: ratingModalData.hostUserId,
-          raterUserId: user.userId,
-          ratingScore: rating,
-          ratingComment: comment || null,
-        }),
+      logger.log(`⭐ 평가 제출: ${rating}점, 호스트 ${ratingModalData.hostUserId}`);
+
+      await ratingsService.submitRating({
+        ratedUserId: ratingModalData.hostUserId,
+        raterUserId: user.userId,
+        ratingScore: rating,
+        ratingComment: comment || undefined,
       });
 
-      if (response.ok) {
-        logger.log(`⭐ 평가 제출 성공: ${rating}점`);
-        alert('평가가 제출되었습니다. 감사합니다!');
-      } else {
-        const error = await response.json();
-        logger.error('❌ 평가 제출 실패:', error);
-        alert('평가 제출에 실패했습니다. 다시 시도해주세요.');
-      }
+      logger.log('⭐ 평가 제출 성공');
+      alert('평가가 제출되었습니다. 감사합니다!');
     } catch (error) {
-      logger.error('❌ 평가 제출 에러:', error);
-      alert('평가 제출 중 오류가 발생했습니다.');
+      logger.error('❌ 평가 제출 실패:', error);
+      alert('평가 제출에 실패했습니다. 다시 시도해주세요.');
     }
   };
 
@@ -210,6 +200,7 @@ export default function AppPage() {
           hostUserId={ratingModalData.hostUserId}
           onClose={() => setRatingModalData(null)}
           onSubmit={handleRatingSubmit}
+          message={ratingModalData.message}
         />
       )}
     </div>

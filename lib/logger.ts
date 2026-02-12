@@ -5,7 +5,10 @@
  * 프로덕션 환경: warn, error만 출력
  */
 
-const isDev = process.env.NODE_ENV === 'development';
+// 클라이언트 사이드에서는 process.env.NODE_ENV를 직접 사용
+const isDev = typeof window !== 'undefined'
+  ? process.env.NODE_ENV !== 'production'
+  : process.env.NODE_ENV === 'development';
 
 export const logger = {
   /**

@@ -55,7 +55,7 @@ export function useSocket() {
   const [currentRoom, setCurrentRoom] = useState<Room | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]); // 채팅 메시지
-  const [ratingModalData, setRatingModalData] = useState<{ show: boolean; hostUserId?: number } | null>(null);
+  const [ratingModalData, setRatingModalData] = useState<{ show: boolean; hostUserId?: number; message?: string } | null>(null);
 
   useEffect(() => {
     const socket = getSocket();
@@ -140,7 +140,7 @@ export function useSocket() {
       // 평가 모달 표시 로직
       if (data.showRatingModal && data.hostUserId) {
         logger.info('⭐ Showing rating modal for host:', data.hostUserId);
-        setRatingModalData({ show: true, hostUserId: data.hostUserId });
+        setRatingModalData({ show: true, hostUserId: data.hostUserId, message: data.message });
       } else {
         alert(data.message);
       }

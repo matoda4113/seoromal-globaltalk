@@ -7,9 +7,10 @@ interface RatingModalProps {
   hostUserId: number;
   onClose: () => void;
   onSubmit: (rating: number, comment: string) => void;
+  message?: string;
 }
 
-export default function RatingModal({ hostUserId, onClose, onSubmit }: RatingModalProps) {
+export default function RatingModal({ hostUserId, onClose, onSubmit, message }: RatingModalProps) {
   const [rating, setRating] = useState<number>(0);
   const [comment, setComment] = useState('');
   const [hoveredStar, setHoveredStar] = useState<number>(0);
@@ -36,6 +37,9 @@ export default function RatingModal({ hostUserId, onClose, onSubmit }: RatingMod
         {/* 헤더 */}
         <div className="mb-6 text-center">
           <h2 className="text-2xl font-bold text-white mb-2">호스트 평가</h2>
+          {message ? (
+            <p className="text-yellow-400 text-sm mb-2">{message}</p>
+          ) : null}
           <p className="text-gray-400 text-sm">통화가 어떠셨나요? 호스트를 평가해주세요.</p>
         </div>
 
