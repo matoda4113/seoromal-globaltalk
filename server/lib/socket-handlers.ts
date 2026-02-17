@@ -534,7 +534,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
     });
 
     // 방 입장 (로그인 유저만 가능)
-    socket.on('joinRoom', (data: { roomId: string; nickname?: string }) => {
+    socket.on('joinRoom', async (data: { roomId: string; nickname?: string }) => {
       const userId = userSocketIds.get(socket.id);
       const authUser = userId ? authenticatedUsers.get(userId) : null;
 
@@ -543,6 +543,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
         socket.emit('error', { message: '로그인 이후 방 입장 가능합니다.' });
         return;
       }
+
 
       // 이미 다른 방에 참가 중인지 체크 (socketId 또는 userId로 확인)
       for (const [roomId, existingRoom] of rooms.entries()) {
@@ -567,6 +568,33 @@ export function initializeSocketHandlers(io: SocketIOServer) {
 
       // 호스트 여부 확인 (방을 만든 사람인지)
       const isHost = room.hostId === authUser.userId;
+
+      // 게스트인 경우 포인트 체크 (10점 미만이면 입장 불가)
+      if (!isHost) {
+        try {
+          const pointsResult = await pool.query(
+            `SELECT COALESCE(SUM(amount), 0)::int AS balance FROM points WHERE user_id = $1`,
+            [authUser.userId]
+          );
+          const balance = pointsResult.rows[0].balance;
+          logger.info(`💰 입장 포인트 체크: userId=${authUser.userId}, balance=${balance}`);
+
+          if (balance < 10) {
+            socket.emit('error', { message: `포인트가 부족합니다. (현재 ${balance}점, 최소 10점 필요)` });
+            return;
+          }
+        } catch (error) {
+          logger.error('❌ 포인트 조회 실패:', error);
+          socket.emit('error', { message: '포인트 확인 중 오류가 발생했습니다.' });
+          return;
+        }
+      }
+
+      // await 이후 다시 정원 체크 (동시 입장 race condition 방지)
+      if (room.participants.length >= room.maxParticipants) {
+        socket.emit('error', { message: '방이 가득 찼습니다.' });
+        return;
+      }
 
       // 참가자 추가
       const newParticipant: Participant = {

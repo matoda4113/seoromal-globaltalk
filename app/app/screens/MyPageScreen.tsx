@@ -113,6 +113,13 @@ export default function MyPageScreen({ locale }: MyPageScreenProps) {
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 탭 진입 시 사용자 정보 새로고침
+  useEffect(() => {
+    if (isAuthenticated) {
+      refreshUser();
+    }
+  }, []);
+
   useEffect(() => {
     if (user) {
       setNickname(user.nickname || '');
