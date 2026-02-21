@@ -46,8 +46,9 @@ const translations = {
     giftReceivedToast: '님이 도토리를 선물했습니다!',
     confirmLeave: '나가시겠습니까?',
     confirmLeaveWithGuest: '방을 나가면 대화가 종료됩니다. 나가시겠습니까?',
-    confirmLeaveWithPenalty: '10분 미만 통화 종료 시 패널티가 부여됩니다.',
-    confirmLeaveWithPoints: '10분 미만 통화 시 도토리 10개가 차감됩니다.',
+    confirmLeaveWithRating: '나가시겠습니까?\n방을 나간 이후에 평점을 남기시면 도토리를 받을 수 있습니다!',
+    confirmLeaveWithPenalty: '10분 미만이어도 최소 통화 시간이 적용되어 패널티가 부여됩니다.',
+    confirmLeaveWithPoints: '10분 미만이어도 최소 도토리 10개가 차감됩니다.',
     reallyLeave: '정말 나가시겠습니까?',
     confirm: '확인',
     warning: '경고',
@@ -76,8 +77,9 @@ const translations = {
     giftReceivedToast: 'sent you acorns!',
     confirmLeave: 'Do you want to leave?',
     confirmLeaveWithGuest: 'Leaving will end the conversation. Do you want to leave?',
-    confirmLeaveWithPenalty: 'A penalty will be applied for ending calls under 10 minutes.',
-    confirmLeaveWithPoints: '10 acorns will be deducted for calls under 10 minutes.',
+    confirmLeaveWithRating: 'Do you want to leave?\nAfter leaving the room, you can earn acorns by rating!',
+    confirmLeaveWithPenalty: 'Even if under 10 minutes, minimum call time penalty will be applied.',
+    confirmLeaveWithPoints: 'Even if under 10 minutes, a minimum of 10 acorns will be deducted.',
     reallyLeave: 'Are you sure you want to leave?',
     confirm: 'Confirm',
     warning: 'Warning',
@@ -106,8 +108,9 @@ const translations = {
     giftReceivedToast: 'さんからどんぐりが届きました！',
     confirmLeave: '退出しますか？',
     confirmLeaveWithGuest: '退出すると会話が終了します。退出しますか？',
-    confirmLeaveWithPenalty: '10分未満の通話終了時にはペナルティが適用されます。',
-    confirmLeaveWithPoints: '10分未満の通話時にはどんぐり10個が差し引かれます。',
+    confirmLeaveWithRating: '退出しますか？\nルームを出た後に評価を残すとどんぐりが獲得できます！',
+    confirmLeaveWithPenalty: '10分未満でも最低通話時間が適用されペナルティが課されます。',
+    confirmLeaveWithPoints: '10分未満でも最低どんぐり10個が差し引かれます。',
     reallyLeave: '本当に退出しますか？',
     confirm: '確認',
     warning: '警告',
@@ -499,8 +502,8 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, locale, mess
       } else {
         // 게스트가 있을 때만 경고 (커스텀 모달)
         if (isTenMinutesOrMore) {
-          // 10분 이상 통화한 경우 - 패널티 없음
-          setConfirmModalData({ message: t.confirmLeaveWithGuest });
+          // 10분 이상 통화한 경우 - 패널티 없음, 평점 유도
+          setConfirmModalData({ message: t.confirmLeaveWithRating });
         } else {
           // 10분 미만 통화 중 나가는 경우 - 패널티 있음
           setConfirmModalData({
@@ -520,8 +523,8 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, locale, mess
         } else {
           // 15초 이상인 경우 확인 메시지 표시 (커스텀 모달)
           if (isTenMinutesOrMore) {
-            // 10분 이상 통화한 경우
-            setConfirmModalData({ message: t.confirmLeave });
+            // 10분 이상 통화한 경우 - 평점 유도
+            setConfirmModalData({ message: t.confirmLeaveWithRating });
           } else {
             // 10분 미만 통화 중 나가는 경우 - 도토리 차감 경고
             setConfirmModalData({
