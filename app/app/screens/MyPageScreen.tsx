@@ -20,6 +20,7 @@ const translations = {
     nickname: '닉네임',
     bio: '자기소개',
     provider: '로그인 방법',
+    country: '국가',
     ageGroup: '연령대',
     gender: '성별',
     degree: '매너 온도',
@@ -48,6 +49,7 @@ const translations = {
     nickname: 'Nickname',
     bio: 'Bio',
     provider: 'Login Method',
+    country: 'Country',
     ageGroup: 'Age Group',
     gender: 'Gender',
     degree: 'Manner Temperature',
@@ -76,6 +78,7 @@ const translations = {
     nickname: 'ニックネーム',
     bio: '自己紹介',
     provider: 'ログイン方法',
+    country: '国',
     ageGroup: '年齢層',
     gender: '性別',
     degree: 'マナー温度',
@@ -201,19 +204,29 @@ export default function MyPageScreen({ locale }: MyPageScreenProps) {
     try {
       setIsUploadingImage(true);
 
-      // 이미지 압축 및 webp 변환 옵션
-      const options = {
-        maxWidthOrHeight: 1024, // 가로 또는 세로 최대 1024px
-        useWebWorker: true,
-        fileType: 'image/webp' as const,
-      };
+      let fileToUpload: File = file;
 
-      logger.info('Compressing image...');
-      const compressedFile = await imageCompression(file, options);
-      logger.info('Image compressed:', { originalSize: file.size, compressedSize: compressedFile.size });
+      // WebP 변환 시도 (실패해도 계속 진행)
+      try {
+        // 이미지 압축 및 webp 변환 옵션
+        const options = {
+          maxWidthOrHeight: 1024, // 가로 또는 세로 최대 1024px
+          useWebWorker: true,
+          fileType: 'image/webp' as const,
+        };
 
-      // 백엔드에 업로드
-      const { imageUrl } = await authService.uploadProfileImage(compressedFile);
+        logger.info('Compressing image to webp...');
+        const compressedFile = await imageCompression(file, options);
+        logger.info('Image compressed:', { originalSize: file.size, compressedSize: compressedFile.size });
+        fileToUpload = compressedFile;
+      } catch (compressionError) {
+        // 변환 실패 시 원본 사용 (서버에서 변환 처리)
+        logger.warn('Client-side compression failed, uploading original:', compressionError);
+        logger.info('Server will handle the conversion');
+      }
+
+      // 백엔드에 업로드 (webp 또는 원본)
+      const { imageUrl } = await authService.uploadProfileImage(fileToUpload);
       logger.info('Profile image uploaded:', imageUrl);
 
       // 사용자 정보 새로고침
@@ -250,6 +263,33 @@ export default function MyPageScreen({ locale }: MyPageScreenProps) {
   const getAgeGroupText = (ageGroup: number | null | undefined) => {
     if (!ageGroup) return myPageT.notSet;
     return `${ageGroup}${locale === 'ko' ? '대' : locale === 'ja' ? '代' : 's'}`;
+  };
+
+  const getCountryName = (countryCode: string | null | undefined) => {
+    if (!countryCode) return myPageT.notSet;
+
+    const countryNames: { [key: string]: { ko: string; en: string; ja: string } } = {
+      kr: { ko: '대한민국', en: 'South Korea', ja: '韓国' },
+      us: { ko: '미국', en: 'United States', ja: 'アメリカ' },
+      jp: { ko: '일본', en: 'Japan', ja: '日本' },
+      cn: { ko: '중국', en: 'China', ja: '中国' },
+      gb: { ko: '영국', en: 'United Kingdom', ja: 'イギリス' },
+      de: { ko: '독일', en: 'Germany', ja: 'ドイツ' },
+      fr: { ko: '프랑스', en: 'France', ja: 'フランス' },
+      ca: { ko: '캐나다', en: 'Canada', ja: 'カナダ' },
+      au: { ko: '호주', en: 'Australia', ja: 'オーストラリア' },
+      vn: { ko: '베트남', en: 'Vietnam', ja: 'ベトナム' },
+      th: { ko: '태국', en: 'Thailand', ja: 'タイ' },
+      ph: { ko: '필리핀', en: 'Philippines', ja: 'フィリピン' },
+      in: { ko: '인도', en: 'India', ja: 'インド' },
+      sg: { ko: '싱가포르', en: 'Singapore', ja: 'シンガポール' },
+      my: { ko: '말레이시아', en: 'Malaysia', ja: 'マレーシア' },
+      tw: { ko: '대만', en: 'Taiwan', ja: '台湾' },
+      hk: { ko: '홍콩', en: 'Hong Kong', ja: '香港' },
+    };
+
+    const code = countryCode.toLowerCase();
+    return countryNames[code]?.[locale] || countryCode.toUpperCase();
   };
 
   // 로딩 중
@@ -458,6 +498,12 @@ export default function MyPageScreen({ locale }: MyPageScreenProps) {
         <div className="flex items-center justify-between py-3 border-b border-gray-100">
           <span className="text-sm font-medium text-gray-600">{myPageT.provider}</span>
           <span className="text-sm font-semibold text-gray-900">{getProviderName(user?.provider || '')}</span>
+        </div>
+
+        {/* 국가 */}
+        <div className="flex items-center justify-between py-3 border-b border-gray-100">
+          <span className="text-sm font-medium text-gray-600">{myPageT.country}</span>
+          <span className="text-sm font-semibold text-gray-900">{getCountryName(user?.country)}</span>
         </div>
 
         {/* 연령대 */}

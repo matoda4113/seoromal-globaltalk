@@ -24,7 +24,7 @@ export default function AppPage() {
   const [currentRoomForModal, setCurrentRoomForModal] = useState<Room | null>(null);
 
   // Socket 연결 및 방 목록 가져오기
-  const { rooms, isConnected, onlineCount, createRoom, currentRoom, leaveRoom, joinRoom, messages, sendMessage, ratingModalData, setRatingModalData } = useSocket();
+  const { rooms, isConnected, onlineCount, createRoom, currentRoom, leaveRoom, joinRoom, messages, sendMessage, ratingModalData, setRatingModalData, guestBalance, giftNotification } = useSocket();
 
   useEffect(() => {
     const langParam = searchParams.get('lang');
@@ -191,6 +191,8 @@ export default function AppPage() {
           locale={locale}
           messages={messages}
           onSendMessage={sendMessage}
+          guestBalance={guestBalance}
+          giftNotification={giftNotification}
         />
       )}
 

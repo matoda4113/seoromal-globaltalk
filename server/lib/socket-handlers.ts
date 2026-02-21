@@ -34,10 +34,48 @@ interface Room {
   sessionStartedAt?: Date; // 대화 시작시간
 }
 
+// 모듈 레벨 변수 (gift controller 등에서 접근 가능)
+let _io: SocketIOServer | null = null;
+export const userSocketIds = new Map<string, number>(); // socketId -> userId
+
+// 포인트 업데이트 알림 함수
+export function notifyPointsUpdate(userId: number, balance: number) {
+  if (!_io) {
+    logger.warn('⚠️ Socket.IO not initialized');
+    return;
+  }
+
+  const socketId = Array.from(userSocketIds.entries())
+    .find(([_, id]) => id === userId)?.[0];
+
+  if (socketId) {
+    _io.to(socketId).emit('pointsUpdated', { balance });
+    logger.log(`💰 userId ${userId}에게 잔액 업데이트 전송: ${balance}점`);
+  }
+}
+
+// 선물 수신 알림 함수
+export function notifyGiftReceived(userId: number, senderNickname: string, amount: number, newBalance: number) {
+  if (!_io) {
+    logger.warn('⚠️ Socket.IO not initialized');
+    return;
+  }
+
+  const socketId = Array.from(userSocketIds.entries())
+    .find(([_, id]) => id === userId)?.[0];
+
+  if (socketId) {
+    _io.to(socketId).emit('giftReceived', { senderNickname, amount, newBalance });
+    logger.log(`🎁 userId ${userId}에게 선물 알림 전송: ${senderNickname}님이 ${amount}점 선물`);
+  }
+}
+
 export function initializeSocketHandlers(io: SocketIOServer) {
+  // io 저장
+  _io = io;
+
   // 연결된 사용자 관리
   const authenticatedUsers = new Map<number, User>(); // userId -> user (socketId 포함, 중복 제거됨)
-  const userSocketIds = new Map<string, number>(); // socketId -> userId (disconnect 시 필요)
   const anonymousUsers = new Map<string, AnonymousUser>(); // socketId -> anonymous
 
   // 방 목록 (임시 - 나중에 Redis로 변경)
@@ -534,7 +572,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
     });
 
     // 방 입장 (로그인 유저만 가능)
-    socket.on('joinRoom', async (data: { roomId: string; nickname?: string }) => {
+    socket.on('joinRoom', async (data: { roomId: string; nickname?: string; password?: string }) => {
       const userId = userSocketIds.get(socket.id);
       const authUser = userId ? authenticatedUsers.get(userId) : null;
 
@@ -569,14 +607,29 @@ export function initializeSocketHandlers(io: SocketIOServer) {
       // 호스트 여부 확인 (방을 만든 사람인지)
       const isHost = room.hostId === authUser.userId;
 
+      // 게스트인 경우 비밀방 비밀번호 체크
+      if (!isHost && room.isPrivate) {
+        if (!data.password) {
+          socket.emit('error', { message: '비밀번호를 입력해주세요.' });
+          return;
+        }
+        if (data.password !== room.password) {
+          socket.emit('error', { message: '비밀번호가 일치하지 않습니다.' });
+          return;
+        }
+        logger.log(`🔐 비밀방 입장 성공: ${authUser.nickname} → ${room.title}`);
+      }
+
       // 게스트인 경우 포인트 체크 (10점 미만이면 입장 불가)
+      let guestBalance: number | undefined;
       if (!isHost) {
         try {
           const pointsResult = await pool.query(
             `SELECT COALESCE(SUM(amount), 0)::int AS balance FROM points WHERE user_id = $1`,
             [authUser.userId]
           );
-          const balance = pointsResult.rows[0].balance;
+          const balance: number = pointsResult.rows[0].balance;
+          guestBalance = balance;
           logger.info(`💰 입장 포인트 체크: userId=${authUser.userId}, balance=${balance}`);
 
           if (balance < 10) {
@@ -620,10 +673,11 @@ export function initializeSocketHandlers(io: SocketIOServer) {
 
       rooms.set(room.id, room);
 
-      // 입장한 사용자에게 방 정보 전송
+      // 입장한 사용자에게 방 정보 전송 (게스트는 잔액 포함)
       socket.emit('roomJoined', {
         ...serializeRoom(room),
         agoraAppId: process.env.NEXT_PUBLIC_AGORA_APP_ID || '',
+        ...(guestBalance !== undefined && { guestBalance }),
       });
 
       // 방의 모든 참가자에게 업데이트 알림

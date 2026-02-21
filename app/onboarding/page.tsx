@@ -22,6 +22,7 @@ const translations = {
     country: '국가',
     korea: '한국',
     japan: '일본',
+    usa: '미국',
     complete: '완료',
     skip: '나중에 하기',
   },
@@ -39,6 +40,7 @@ const translations = {
     country: 'Country',
     korea: 'Korea',
     japan: 'Japan',
+    usa: 'USA',
     complete: 'Complete',
     skip: 'Skip for now',
   },
@@ -56,6 +58,7 @@ const translations = {
     country: '国',
     korea: '韓国',
     japan: '日本',
+    usa: 'アメリカ',
     complete: '完了',
     skip: '後で',
   },
@@ -224,7 +227,7 @@ export default function OnboardingPage() {
           {/* 국가 */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">{t.country}</label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <button
                 type="button"
                 onClick={() => setCountry('KR')}
@@ -246,6 +249,17 @@ export default function OnboardingPage() {
                 }`}
               >
                 {t.japan}
+              </button>
+              <button
+                type="button"
+                onClick={() => setCountry('US')}
+                className={`py-3 rounded-lg font-medium transition-all ${
+                  country === 'US'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {t.usa}
               </button>
             </div>
           </div>

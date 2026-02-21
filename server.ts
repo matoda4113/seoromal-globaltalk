@@ -22,6 +22,7 @@ import authRoutes from './server/routes/auth.routes';
 import pointsRoutes from './server/routes/points.routes';
 import uploadRoutes from './server/routes/upload.routes';
 import ratingsRoutes from './server/routes/ratings.routes';
+import giftRoutes from './server/routes/gift.routes';
 
 const dev = process.env.NODE_ENV !== 'production';
 const PORT = process.env.PORT || 4000;
@@ -72,6 +73,7 @@ app.prepare().then(() => {
   expressApp.use('/points', pointsRoutes);
   expressApp.use('/upload', uploadRoutes);
   expressApp.use('/ratings', ratingsRoutes);
+  expressApp.use('/gift', giftRoutes);
 
   // Initialize Socket.IO handlers
   initializeSocketHandlers(io);

@@ -39,6 +39,19 @@ create table public.points (
 | `rating_reward` | `earn` | +1 | 평가 작성 보상 | 통화 후 평가를 제출한 사람에게 지급 |
 | `five_star_bonus` | `earn` | +1 | 5점 평가 보너스 | 5점 평가를 받은 사람에게 지급 |
 
+### 3. 선물하기 관련
+
+| reason | type | amount | 설명 | 발생 조건 |
+|--------|------|--------|------|----------|
+| `gift_sent` | `charge` | 가변 (음수) | 선물 보내기 | 다른 사용자에게 포인트 선물 시 차감<br>선택 가능: 50, 100, 200, 300점 |
+| `gift_received` | `earn` | 가변 (양수) | 선물 받기 | 다른 사용자로부터 포인트 선물 수령 |
+
+**선물하기 특징:**
+- 통화 중(세션 시작 후)에만 가능
+- 상대방에게 즉시 전송
+- 실시간 잔액 업데이트 (소켓 이벤트)
+- 자기 자신에게 선물 불가
+
 ## 통화 요금 계산 로직
 
 ### 기본 원칙
@@ -122,6 +135,8 @@ const reasonText = {
     early_exit_penalty: '조기 퇴장 패널티',
     rating_reward: '평가 작성 보상',
     five_star_bonus: '5점 평가 보너스',
+    gift_sent: '선물 보내기',
+    gift_received: '선물 받기',
   },
   en: {
     call_charge: 'Call Fee',
@@ -129,6 +144,8 @@ const reasonText = {
     early_exit_penalty: 'Early Exit Penalty',
     rating_reward: 'Rating Reward',
     five_star_bonus: '5-Star Bonus',
+    gift_sent: 'Gift Sent',
+    gift_received: 'Gift Received',
   },
   ja: {
     call_charge: '通話料金',
@@ -136,6 +153,8 @@ const reasonText = {
     early_exit_penalty: '早期退出ペナルティ',
     rating_reward: '評価報酬',
     five_star_bonus: '5つ星ボーナス',
+    gift_sent: 'ギフト送信',
+    gift_received: 'ギフト受取',
   },
 };
 ```
@@ -150,6 +169,8 @@ const reasonDescription = {
     early_exit_penalty: '10분 이내 조기 퇴장으로 패널티가 부과되었습니다.',
     rating_reward: '평가를 작성하여 보상을 받았습니다.',
     five_star_bonus: '5점 만점 평가를 받아 보너스를 획득했습니다!',
+    gift_sent: '상대방에게 선물을 보냈습니다.',
+    gift_received: '상대방으로부터 선물을 받았습니다!',
   },
   // ...
 };
@@ -159,4 +180,23 @@ const reasonDescription = {
 
 - **서버**: `/server/lib/socket-handlers.ts` (통화 정산)
 - **서버**: `/server/controllers/ratings.controller.ts` (평가 처리)
+- **서버**: `/server/controllers/gift.controller.ts` (선물하기)
+- **클라이언트**: `/services/gift.service.ts` (선물하기 서비스)
 - **DB 스키마**: `points` 테이블
+
+## 실시간 포인트 업데이트
+
+포인트가 변동되는 모든 경우에 소켓 이벤트 `pointsUpdated`를 통해 실시간으로 잔액이 업데이트됩니다:
+
+- 선물 보내기/받기
+- 포인트 충전 (향후 구현)
+
+**이벤트 구조:**
+```typescript
+socket.emit('pointsUpdated', { balance: newBalance });
+```
+
+**클라이언트 처리:**
+- 잔액 업데이트
+- 남은 통화 시간 재계산
+- 자동 퇴장 타이머 재설정

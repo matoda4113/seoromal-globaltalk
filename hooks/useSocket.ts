@@ -56,6 +56,8 @@ export function useSocket() {
   const [isConnected, setIsConnected] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]); // 채팅 메시지
   const [ratingModalData, setRatingModalData] = useState<{ show: boolean; hostUserId?: number; message?: string } | null>(null);
+  const [guestBalance, setGuestBalance] = useState<number | undefined>(undefined); // 게스트 잔액
+  const [giftNotification, setGiftNotification] = useState<{ senderNickname: string; amount: number } | null>(null); // 선물 알림
 
   useEffect(() => {
     const socket = getSocket();
@@ -113,16 +115,23 @@ export function useSocket() {
       });
     };
 
-    const handleRoomJoined = (room: Room) => {
-      logger.info('👋 Joined room:', room);
-      setCurrentRoom(room);
+    const handleRoomJoined = (data: Room & { guestBalance?: number }) => {
+      logger.info('👋 Joined room:', data);
+      setCurrentRoom(data);
       setMessages([]); // 방 입장 시 메시지 초기화
+
+      // 게스트 잔액 저장
+      if (data.guestBalance !== undefined) {
+        setGuestBalance(data.guestBalance);
+        logger.info(`💰 게스트 잔액: ${data.guestBalance}점`);
+      }
     };
 
     const handleRoomLeft = (data: { roomId: string; showRatingModal?: boolean; hostUserId?: number }) => {
       logger.info('🚪 Left room:', data.roomId);
       setCurrentRoom(null);
       setMessages([]); // 방 나갈 때 메시지 초기화
+      setGuestBalance(undefined); // 잔액 초기화
 
 
       if (data.showRatingModal && data.hostUserId) {
@@ -136,6 +145,7 @@ export function useSocket() {
 
       setCurrentRoom(null);
       setMessages([]); // 방 닫힐 때 메시지 초기화
+      setGuestBalance(undefined); // 잔액 초기화
 
       // 평가 모달 표시 로직
       if (data.showRatingModal && data.hostUserId) {
@@ -166,6 +176,19 @@ export function useSocket() {
       });
     };
 
+    const handlePointsUpdated = (data: { balance: number }) => {
+      logger.info('💰 Points updated:', data.balance);
+      setGuestBalance(data.balance);
+    };
+
+    const handleGiftReceived = (data: { senderNickname: string; amount: number; newBalance: number }) => {
+      logger.info('🎁 Gift received:', data);
+      setGuestBalance(data.newBalance); // 잔액 업데이트
+      setGiftNotification({ senderNickname: data.senderNickname, amount: data.amount }); // 알림 표시
+      // 3초 후 알림 자동 제거
+      setTimeout(() => setGiftNotification(null), 3000);
+    };
+
     // 이벤트 리스너 등록
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
@@ -180,6 +203,8 @@ export function useSocket() {
     socket.on('error', handleError);
     socket.on('onlineCount', handleOnlineCount);
     socket.on('newMessage', handleNewMessage);
+    socket.on('pointsUpdated', handlePointsUpdated);
+    socket.on('giftReceived', handleGiftReceived);
 
     // 이미 연결되어 있다면 즉시 방 목록 요청 및 온라인 카운트 요청
     if (socket.connected) {
@@ -205,13 +230,15 @@ export function useSocket() {
       socket.off('error', handleError);
       socket.off('onlineCount', handleOnlineCount);
       socket.off('newMessage', handleNewMessage);
+      socket.off('pointsUpdated', handlePointsUpdated);
+      socket.off('giftReceived', handleGiftReceived);
     };
   }, [currentRoom]);
 
-  const joinRoom = (roomId: string, nickname?: string) => {
+  const joinRoom = (roomId: string, nickname?: string, password?: string) => {
     const socket = getSocket();
-    logger.info('Joining room:', roomId, nickname);
-    socket.emit('joinRoom', { roomId, nickname });
+    logger.info('Joining room:', roomId, nickname, password ? '(with password)' : '');
+    socket.emit('joinRoom', { roomId, nickname, password });
   };
 
   const leaveRoom = (roomId: string) => {
@@ -260,6 +287,8 @@ export function useSocket() {
     messages,
     ratingModalData,
     setRatingModalData,
+    guestBalance,
+    giftNotification,
     joinRoom,
     leaveRoom,
     createRoom,

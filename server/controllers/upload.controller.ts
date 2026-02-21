@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import multer from 'multer';
+import sharp from 'sharp';
 import { supabase } from '../lib/supabase.js';
 import { pool } from '../lib/db.js';
 import { logger } from '../utils/logger.js';
@@ -11,14 +12,14 @@ const storage = multer.memoryStorage();
 const upload = multer({
   storage,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB 제한
+    fileSize: 10 * 1024 * 1024, // 10MB 제한 (원본 이미지도 받으므로 증가)
   },
   fileFilter: (req, file, cb) => {
-    // webp 파일만 허용
-    if (file.mimetype === 'image/webp') {
+    // 모든 이미지 포맷 허용 (webp, jpeg, jpg, png, heic, heif 등)
+    if (file.mimetype.startsWith('image/')) {
       cb(null, true);
     } else {
-      cb(new Error('Only webp images are allowed'));
+      cb(new Error('Only image files are allowed'));
     }
   },
 });
@@ -28,7 +29,8 @@ export const uploadSingle = upload.single('image');
 
 /**
  * 프로필 이미지 업로드
- * - multipart/form-data로 이미지 수신 (이미 webp로 변환됨)
+ * - multipart/form-data로 이미지 수신 (모든 이미지 포맷 허용)
+ * - webp가 아닌 경우 webp로 변환 (최대 1024px)
  * - Supabase Storage에 업로드 (버켓: images, 폴더: user-image)
  * - users 테이블의 profile_image 컬럼에 URL 저장
  */
@@ -45,6 +47,33 @@ export async function uploadProfileImage(req: Request, res: Response) {
       });
     }
 
+    logger.info(`Processing profile image for user ${userId}, mimetype: ${file.mimetype}`);
+
+    // 이미지 처리: webp가 아니면 변환
+    let processedBuffer: Buffer;
+
+    if (file.mimetype === 'image/webp') {
+      // 이미 webp인 경우: 크기만 조정
+      logger.info('Image is already webp, resizing only');
+      processedBuffer = await sharp(file.buffer)
+        .resize(1024, 1024, {
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+        .webp({ quality: 85 })
+        .toBuffer();
+    } else {
+      // webp가 아닌 경우: webp로 변환 + 리사이즈
+      logger.info(`Converting ${file.mimetype} to webp`);
+      processedBuffer = await sharp(file.buffer)
+        .resize(1024, 1024, {
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+        .webp({ quality: 85 })
+        .toBuffer();
+    }
+
     // 고유한 파일명 생성
     const fileExt = 'webp';
     const fileName = `${userId}-${uuidv4()}.${fileExt}`;
@@ -52,10 +81,10 @@ export async function uploadProfileImage(req: Request, res: Response) {
 
     logger.info(`Uploading profile image for user ${userId}: ${fileName}`);
 
-    // Supabase Storage에 업로드
+    // Supabase Storage에 업로드 (처리된 이미지 사용)
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('images')
-      .upload(filePath, file.buffer, {
+      .upload(filePath, processedBuffer, {
         contentType: 'image/webp',
         upsert: false,
       });

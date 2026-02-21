@@ -26,7 +26,7 @@ interface HomeScreenProps {
     isPrivate: boolean;
     password?: string;
   }) => void;
-  onJoinRoom: (roomId: string) => void;
+  onJoinRoom: (roomId: string, nickname?: string, password?: string) => void;
   currentUserId?: number | null;
 }
 
@@ -52,6 +52,33 @@ export default function HomeScreen({
     const topicMatch = topicFilter === 'all' || room.topic === topicFilter;
     return languageMatch && topicMatch;
   });
+
+  // 방 입장 핸들러 (비밀방이면 비밀번호 입력)
+  const handleJoinRoom = (roomId: string) => {
+    const room = rooms.find((r) => r.id === roomId);
+    if (!room) return;
+
+    // 비밀방인 경우 비밀번호 입력
+    if (room.isPrivate) {
+      const password = prompt(
+        locale === 'ko'
+          ? '비밀번호를 입력하세요:'
+          : locale === 'ja'
+          ? 'パスワードを入力してください:'
+          : 'Enter password:'
+      );
+
+      if (password === null) {
+        // 취소 버튼 클릭
+        return;
+      }
+
+      onJoinRoom(roomId, undefined, password);
+    } else {
+      // 일반 방
+      onJoinRoom(roomId);
+    }
+  };
 
   return (
     <>
@@ -135,7 +162,7 @@ export default function HomeScreen({
               participantsText={t.app.participants}
               languageText={t.app.filters[room.language as keyof typeof t.app.filters] as string}
               topicText={t.app.filters[room.topic as keyof typeof t.app.filters] as string}
-              onJoin={onJoinRoom}
+              onJoin={handleJoinRoom}
               currentUserId={currentUserId}
             />
           ))}

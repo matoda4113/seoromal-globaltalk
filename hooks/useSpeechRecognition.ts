@@ -82,12 +82,12 @@ export function useSpeechRecognition(
       };
 
       recognition.onerror = (event: any) => {
-        logger.error('❌ STT 오류:', {
-          type: event.type,
-          error: event.error,
-          message: event.message,
-          full: event
-        });
+        // logger.error('❌ STT 오류:', {
+        //   type: event.type,
+        //   error: event.error,
+        //   message: event.message,
+        //   full: event
+        // });
 
         // no-speech, aborted 에러는 무시 (정상적인 상황)
         if (event.error === 'no-speech' || event.error === 'aborted') {
