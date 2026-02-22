@@ -620,7 +620,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
         logger.log(`🔐 비밀방 입장 성공: ${authUser.nickname} → ${room.title}`);
       }
 
-      // 게스트인 경우 포인트 체크 (10점 미만이면 입장 불가)
+      // 게스트인 경우 포인트 체크 (오디오: 10점, 비디오: 40점 미만이면 입장 불가)
       let guestBalance: number | undefined;
       if (!isHost) {
         try {
@@ -630,10 +630,13 @@ export function initializeSocketHandlers(io: SocketIOServer) {
           );
           const balance: number = pointsResult.rows[0].balance;
           guestBalance = balance;
-          logger.info(`💰 입장 포인트 체크: userId=${authUser.userId}, balance=${balance}`);
 
-          if (balance < 10) {
-            socket.emit('error', { message: `포인트가 부족합니다. (현재 ${balance}점, 최소 10점 필요)` });
+          // 방 타입에 따른 최소 포인트 체크
+          const minPoints = room.callType === 'audio' ? 10 : 40;
+          logger.info(`💰 입장 포인트 체크: userId=${authUser.userId}, balance=${balance}, 방타입=${room.callType}, 필요포인트=${minPoints}`);
+
+          if (balance < minPoints) {
+            socket.emit('error', { message: `포인트가 부족합니다. (현재 ${balance}점, 최소 ${minPoints}점 필요)` });
             return;
           }
         } catch (error) {

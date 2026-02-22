@@ -8,6 +8,7 @@ import { useAgora } from '@/hooks/useAgora';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { useTranslate } from '@/hooks/useTranslate';
 import giftService from '@/services/gift.service';
+import PointsRuleModal from './PointsRuleModal';
 
 interface RoomModalProps {
   isOpen: boolean;
@@ -30,6 +31,7 @@ const translations = {
     endCall: '통화 종료',
     speaker: '스피커',
     connecting: '연결 중...',
+    waitingForOther: '상대방을 기다리는 중...',
     remainingTime: '남은 시간',
     minutes: '분',
     hours: '시간',
@@ -48,6 +50,7 @@ const translations = {
     confirmLeaveWithGuest: '방을 나가면 대화가 종료됩니다. 나가시겠습니까?',
     confirmLeaveWithRating: '나가시겠습니까?\n방을 나간 이후에 평점을 남기시면 도토리를 받을 수 있습니다!',
     confirmLeaveWithPenalty: '10분 미만이어도 최소 통화 시간이 적용되어 패널티가 부여됩니다.',
+    confirmHostPenalty: '최소 10분간 응대해야 합니다. 지금 나가시면 패널티가 부과됩니다.',
     confirmLeaveWithPoints: '10분 미만이어도 최소 도토리 10개가 차감됩니다.',
     reallyLeave: '정말 나가시겠습니까?',
     confirm: '확인',
@@ -61,6 +64,7 @@ const translations = {
     endCall: 'End Call',
     speaker: 'Speaker',
     connecting: 'Connecting...',
+    waitingForOther: 'Waiting for the other person...',
     remainingTime: 'Time Left',
     minutes: 'min',
     hours: 'hr',
@@ -79,6 +83,7 @@ const translations = {
     confirmLeaveWithGuest: 'Leaving will end the conversation. Do you want to leave?',
     confirmLeaveWithRating: 'Do you want to leave?\nAfter leaving the room, you can earn acorns by rating!',
     confirmLeaveWithPenalty: 'Even if under 10 minutes, minimum call time penalty will be applied.',
+    confirmHostPenalty: 'You must attend for at least 10 minutes. Leaving now will result in a penalty.',
     confirmLeaveWithPoints: 'Even if under 10 minutes, a minimum of 10 acorns will be deducted.',
     reallyLeave: 'Are you sure you want to leave?',
     confirm: 'Confirm',
@@ -92,6 +97,7 @@ const translations = {
     endCall: '通話終了',
     speaker: 'スピーカー',
     connecting: '接続中...',
+    waitingForOther: '相手を待っています...',
     remainingTime: '残り時間',
     minutes: '分',
     hours: '時間',
@@ -110,6 +116,7 @@ const translations = {
     confirmLeaveWithGuest: '退出すると会話が終了します。退出しますか？',
     confirmLeaveWithRating: '退出しますか？\nルームを出た後に評価を残すとどんぐりが獲得できます！',
     confirmLeaveWithPenalty: '10分未満でも最低通話時間が適用されペナルティが課されます。',
+    confirmHostPenalty: '最低10分間は対応する必要があります。今退出するとペナルティが課されます。',
     confirmLeaveWithPoints: '10分未満でも最低どんぐり10個が差し引かれます。',
     reallyLeave: '本当に退出しますか？',
     confirm: '確認',
@@ -127,6 +134,7 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, locale, mess
   const [selectedGiftAmount, setSelectedGiftAmount] = useState<number | null>(null);
   const [isSendingGift, setIsSendingGift] = useState(false);
   const [confirmModalData, setConfirmModalData] = useState<{ message: string; warning?: string } | null>(null);
+  const [isPointsRuleModalOpen, setIsPointsRuleModalOpen] = useState(false);
 
   // 현재 사용자가 게스트인지 확인
   const isGuest = user?.userId !== room.hostId;
@@ -157,21 +165,36 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, locale, mess
     client,
     isJoined,
     isMuted,
+    isVideoOff,
     toggleMute,
+    toggleVideo,
+    startLocalVideo,
     joinChannel,
     leaveChannel,
     localVolume,
     remoteVolume,
+    localVideoTrack,
+    remoteUsers,
     microphones,
     selectedMicId,
+    cameras,
+    selectedCameraId,
     changeMicrophone,
-  } = useAgora(room.id, user?.userId);
+    changeCamera,
+  } = useAgora(room.id, user?.userId, room.callType);
 
   // ref로 최신 함수 참조 유지
   const onLeaveRef = useRef(onLeave);
   const onCloseRef = useRef(onClose);
   const historyPushedRef = useRef(false);
   const isClosingRef = useRef(false); // 프로그램적으로 닫는 중인지 추적
+
+  // 비디오 재생을 위한 ref
+  const localVideoRef = useRef<HTMLDivElement>(null);
+  const remoteVideoRef = useRef<HTMLDivElement>(null);
+
+  // PIP 모드 state
+  const [isPipMode, setIsPipMode] = useState(false);
 
   useEffect(() => {
     onLeaveRef.current = onLeave;
@@ -246,6 +269,53 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, locale, mess
       setCallDuration(0);
     }
   }, [isOpen, room.sessionStartedAt]);
+
+  // 비디오 모드일 때 로컬 비디오 시작 (미리보기)
+  useEffect(() => {
+    if (isOpen && room.callType === 'video' && !localVideoTrack) {
+      logger.log('📹 Starting local video preview');
+      startLocalVideo();
+    }
+  }, [isOpen, room.callType, localVideoTrack, startLocalVideo]);
+
+  // 로컬 비디오 재생 (PIP 모드 전환 시에도 재생)
+  useEffect(() => {
+    if (room.callType === 'video' && localVideoTrack && localVideoRef.current) {
+      try {
+        // Agora 트랙을 DOM에 재생
+        localVideoTrack.play(localVideoRef.current, { fit: 'cover' });
+        logger.log('📹 Playing local video (isPipMode:', isPipMode, ')');
+      } catch (error) {
+        logger.error('Failed to play local video:', error);
+      }
+    }
+
+    return () => {
+      // cleanup: 트랙은 유지하되 DOM만 정리
+      // localVideoTrack.stop()을 호출하면 카메라가 꺼지므로 호출하지 않음
+    };
+  }, [localVideoTrack, room.callType, isPipMode]);
+
+  // 리모트 비디오 재생 (PIP 모드 전환 시에도 재생)
+  useEffect(() => {
+    if (room.callType === 'video' && remoteUsers.length > 0 && remoteVideoRef.current) {
+      const remoteUser = remoteUsers[0];
+      if (remoteUser.videoTrack) {
+        try {
+          // Agora 트랙을 DOM에 재생
+          remoteUser.videoTrack.play(remoteVideoRef.current, { fit: 'cover' });
+          logger.log('📹 Playing remote video (isPipMode:', isPipMode, ')');
+        } catch (error) {
+          logger.error('Failed to play remote video:', error);
+        }
+      }
+    }
+
+    return () => {
+      // cleanup: 트랙은 유지하되 DOM만 정리
+      // remoteUser.videoTrack.stop()을 호출하면 안 됨
+    };
+  }, [remoteUsers, room.callType, isPipMode]);
 
   // 게스트 포인트 부족 시 자동 퇴장 타이머
   const autoKickTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -453,8 +523,9 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, locale, mess
 
       if (joined && participantCount === 1) {
         // 혼자 남음 → 끊기 (비용 절약)
+        // 비디오 모드는 로컬 비디오 유지
         logger.log('👤 호스트 혼자 남음 → Agora 연결 해제');
-        void leaveChannel();
+        void leaveChannel(room.callType === 'video');
       } else if (!joined && participantCount >= 2) {
         // 접속 안 되어있는데 2명 이상 → 접속
         logger.log('👥 게스트 입장 → 호스트 Agora 연결 시작');
@@ -477,6 +548,31 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, locale, mess
     };
     // eslint-disable-line react-hooks/exhaustive-deps
   }, []);
+
+  // 브라우저 닫기/새로고침 시 Agora 연결 해제 (비용 절약)
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isJoined) {
+        logger.log('⚠️ Browser closing/refreshing - leaving Agora channel');
+        // 동기적으로 연결 해제 (비동기는 브라우저 종료 시 실행 안 됨)
+        if (client && (client.connectionState === 'CONNECTED' || client.connectionState === 'CONNECTING')) {
+          // Navigator.sendBeacon으로 서버에 알림도 고려할 수 있지만
+          // Agora는 일정 시간 후 자동으로 끊으므로 client.leave()만 호출
+          try {
+            // @ts-ignore - leave()를 동기적으로 처리할 수 없지만 시도는 함
+            client.leave();
+          } catch (error) {
+            // 무시
+          }
+        }
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isJoined, client]);
 
   const handleClose = () => {
     logger.log('🚪 handleClose called, current state:', window.history.state);
@@ -505,10 +601,10 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, locale, mess
           // 10분 이상 통화한 경우 - 패널티 없음, 평점 유도
           setConfirmModalData({ message: t.confirmLeaveWithRating });
         } else {
-          // 10분 미만 통화 중 나가는 경우 - 패널티 있음
+          // 10분 미만 통화 중 나가는 경우 - 패널티 있음 (호스트는 의무 강조)
           setConfirmModalData({
             message: t.reallyLeave,
-            warning: t.confirmLeaveWithPenalty
+            warning: t.confirmHostPenalty
           });
         }
         return; // 모달이 처리할 때까지 대기
@@ -527,9 +623,16 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, locale, mess
             setConfirmModalData({ message: t.confirmLeaveWithRating });
           } else {
             // 10분 미만 통화 중 나가는 경우 - 도토리 차감 경고
+            const minPoints = room.callType === 'audio' ? 10 : 40;
+            const warningText = locale === 'ko'
+              ? `10분 미만이어도 최소 도토리 ${minPoints}개가 차감됩니다.`
+              : locale === 'ja'
+              ? `10分未満でも最低どんぐり${minPoints}個が差し引かれます。`
+              : `Even if under 10 minutes, a minimum of ${minPoints} acorns will be deducted.`;
+
             setConfirmModalData({
               message: t.reallyLeave,
-              warning: t.confirmLeaveWithPoints
+              warning: warningText
             });
           }
           return; // 모달이 처리할 때까지 대기
@@ -737,9 +840,9 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, locale, mess
                 })}
               </div>
 
-              {/* 마이크 선택 */}
+              {/* 마이크 선택 (PC only) */}
               {microphones.length > 1 && (
-                <div className="flex items-center gap-3 bg-gray-800/50 px-4 py-3 rounded-lg">
+                <div className="hidden md:flex items-center gap-3 bg-gray-800/50 px-4 py-3 rounded-lg">
                   <svg className="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
                   </svg>
@@ -759,42 +862,238 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, locale, mess
             </div>
           </div>
         ) : (
-          // Video Call Layout
+          // Video Call Layout - PIP 모드 또는 분할 화면
           <div className="relative w-full h-full">
-            {/* Remote Video (큰 화면) */}
-            <div className="absolute inset-0 bg-gray-800 flex items-center justify-center">
-              <div className="text-center">
-                <div className="w-32 h-32 mx-auto bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white text-4xl font-bold mb-4 overflow-hidden">
-                  {room.participants[1]?.profileImageUrl ? (
-                    <img
-                      src={room.participants[1].profileImageUrl}
-                      alt={room.participants[1].nickname}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    room.participants[1]?.nickname?.[0]?.toUpperCase() || '?'
+            {isPipMode ? (
+              // PIP 모드: 상대방 전체화면 + 내 화면 작은 창
+              <>
+                {/* 상대방 비디오 - 전체 화면 */}
+                <div className="absolute inset-0 bg-gray-900">
+                  <div
+                    ref={remoteVideoRef}
+                    className="w-full h-full [&>video]:w-full [&>video]:h-full [&>video]:object-cover"
+                  />
+                  {/* 상대방이 없거나 비디오가 없을 때 플레이스홀더 */}
+                  {(!remoteUsers || remoteUsers.length === 0 || !remoteUsers[0]?.videoTrack) && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
+                      <div className="text-center">
+                        <div className="w-32 h-32 mx-auto bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white text-4xl font-bold mb-4 overflow-hidden">
+                          {room.participants[1]?.profileImageUrl ? (
+                            <img
+                              src={room.participants[1].profileImageUrl}
+                              alt={room.participants[1].nickname}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            room.participants[1]?.nickname?.[0]?.toUpperCase() || '?'
+                          )}
+                        </div>
+                        <p className="text-white text-xl">{room.participants[1]?.nickname || t.waitingForOther}</p>
+                      </div>
+                    </div>
                   )}
                 </div>
-                <p className="text-white text-xl">{room.participants[1]?.nickname || t.connecting}</p>
-              </div>
-            </div>
 
-            {/* Local Video (작은 PIP) */}
-            <div className="absolute top-4 right-4 w-32 h-40 bg-gray-700 rounded-lg overflow-hidden shadow-lg">
-              <div className="w-full h-full flex items-center justify-center">
-                <div className="w-16 h-16 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center text-white text-xl font-bold overflow-hidden">
-                  {room.participants[0]?.profileImageUrl ? (
-                    <img
-                      src={room.participants[0].profileImageUrl}
-                      alt={room.participants[0].nickname}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    room.participants[0]?.nickname?.[0]?.toUpperCase() || 'Y'
+                {/* 내 비디오 - PIP (모바일: 왼쪽 아래, PC: 오른쪽 아래) */}
+                <div className="absolute bottom-4 left-4 md:left-auto md:right-4 w-32 h-48 md:w-48 md:h-64 bg-gray-800 rounded-lg overflow-hidden shadow-2xl z-10 border-2 border-white/30">
+                  <div
+                    ref={localVideoRef}
+                    className="w-full h-full [&>video]:w-full [&>video]:h-full [&>video]:object-cover"
+                  />
+                  {/* 로컬 비디오가 없을 때 플레이스홀더 */}
+                  {!localVideoTrack && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-gray-700">
+                      <div className="text-center">
+                        <div className="w-16 h-16 mx-auto bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center text-white text-xl font-bold overflow-hidden">
+                          {user?.profileImageUrl ? (
+                            <img
+                              src={user.profileImageUrl}
+                              alt={user.nickname}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            user?.nickname?.[0]?.toUpperCase() || 'Y'
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </div>
+
+                {/* PIP 모드 토글 버튼 - 상단 오른쪽 */}
+                <button
+                  onClick={() => setIsPipMode(false)}
+                  className="absolute top-4 right-4 z-20 bg-gray-900/80 backdrop-blur-sm text-white p-3 rounded-lg hover:bg-gray-800 transition-colors"
+                  title="분할 화면으로 전환"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1v-3z" />
+                  </svg>
+                </button>
+
+                {/* 마이크 & 카메라 선택 - PIP 창 안쪽 하단 (PC only) */}
+                {(microphones.length > 1 || cameras.length > 1) && (
+                  <div className="hidden md:block absolute bottom-6 left-6 md:left-auto md:right-6 z-20">
+                    <div className="flex items-center gap-2 bg-gray-900/80 backdrop-blur-sm px-3 py-1.5 rounded-lg">
+                      {/* 마이크 선택 */}
+                      {microphones.length > 1 && (
+                        <div className="flex items-center gap-1">
+                          <svg className="w-4 h-4 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
+                          </svg>
+                          <select
+                            value={selectedMicId}
+                            onChange={(e) => changeMicrophone(e.target.value)}
+                            className="bg-gray-800 text-white text-xs px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            {microphones.map((mic) => (
+                              <option key={mic.deviceId} value={mic.deviceId}>
+                                {mic.label || `마이크 ${mic.deviceId.slice(0, 8)}`}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      {/* 카메라 선택 */}
+                      {cameras.length > 1 && (
+                        <div className="flex items-center gap-1">
+                          <svg className="w-4 h-4 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                          </svg>
+                          <select
+                            value={selectedCameraId}
+                            onChange={(e) => changeCamera(e.target.value)}
+                            className="bg-gray-800 text-white text-xs px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            {cameras.map((camera) => (
+                              <option key={camera.deviceId} value={camera.deviceId}>
+                                {camera.label || `카메라 ${camera.deviceId.slice(0, 8)}`}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              // 분할 화면 모드: 데스크톱 좌우, 모바일 상하
+              <div className="flex flex-col md:flex-row w-full h-full">
+                {/* 상대방 비디오 (데스크톱: 왼쪽, 모바일: 위) */}
+                <div className="flex-1 bg-gray-900 relative overflow-hidden">
+                  <div
+                    ref={remoteVideoRef}
+                    className="w-full h-full [&>video]:w-full [&>video]:h-full [&>video]:object-cover"
+                  />
+                  {/* 상대방이 없거나 비디오가 없을 때 플레이스홀더 */}
+                  {(!remoteUsers || remoteUsers.length === 0 || !remoteUsers[0]?.videoTrack) && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
+                      <div className="text-center">
+                        <div className="w-32 h-32 mx-auto bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white text-4xl font-bold mb-4 overflow-hidden">
+                          {room.participants[1]?.profileImageUrl ? (
+                            <img
+                              src={room.participants[1].profileImageUrl}
+                              alt={room.participants[1].nickname}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            room.participants[1]?.nickname?.[0]?.toUpperCase() || '?'
+                          )}
+                        </div>
+                        <p className="text-white text-xl">{room.participants[1]?.nickname || t.waitingForOther}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 내 비디오 (데스크톱: 오른쪽, 모바일: 아래) */}
+                <div className="flex-1 bg-gray-800 relative overflow-hidden">
+                  <div
+                    ref={localVideoRef}
+                    className="w-full h-full [&>video]:w-full [&>video]:h-full [&>video]:object-cover"
+                  />
+                  {/* 로컬 비디오가 없을 때 플레이스홀더 */}
+                  {!localVideoTrack && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-gray-700">
+                      <div className="text-center">
+                        <div className="w-32 h-32 mx-auto bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center text-white text-4xl font-bold mb-4 overflow-hidden">
+                          {user?.profileImageUrl ? (
+                            <img
+                              src={user.profileImageUrl}
+                              alt={user.nickname}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            user?.nickname?.[0]?.toUpperCase() || 'Y'
+                          )}
+                        </div>
+                        <p className="text-white text-xl">{user?.nickname}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 마이크 & 카메라 선택 (PC only) */}
+                  {(microphones.length > 1 || cameras.length > 1) && (
+                    <div className="hidden md:block absolute bottom-4 left-1/2 transform -translate-x-1/2 z-10">
+                      <div className="flex items-center gap-3 bg-gray-900/80 backdrop-blur-sm px-4 py-2 rounded-lg">
+                        {/* 마이크 선택 */}
+                        {microphones.length > 1 && (
+                          <div className="flex items-center gap-2">
+                            <svg className="w-5 h-5 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
+                            </svg>
+                            <select
+                              value={selectedMicId}
+                              onChange={(e) => changeMicrophone(e.target.value)}
+                              className="bg-gray-800 text-white text-sm px-3 py-1.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              {microphones.map((mic) => (
+                                <option key={mic.deviceId} value={mic.deviceId}>
+                                  {mic.label || `마이크 ${mic.deviceId.slice(0, 8)}`}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
+                        {/* 카메라 선택 */}
+                        {cameras.length > 1 && (
+                          <div className="flex items-center gap-2">
+                            <svg className="w-5 h-5 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                            </svg>
+                            <select
+                              value={selectedCameraId}
+                              onChange={(e) => changeCamera(e.target.value)}
+                              className="bg-gray-800 text-white text-sm px-3 py-1.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              {cameras.map((camera) => (
+                                <option key={camera.deviceId} value={camera.deviceId}>
+                                  {camera.label || `카메라 ${camera.deviceId.slice(0, 8)}`}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* PIP 모드 토글 버튼 - 상단 오른쪽 */}
+                <button
+                  onClick={() => setIsPipMode(true)}
+                  className="absolute top-4 right-4 z-20 bg-gray-900/80 backdrop-blur-sm text-white p-3 rounded-lg hover:bg-gray-800 transition-colors"
+                  title="PIP 모드로 전환"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                </button>
               </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -862,26 +1161,28 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, locale, mess
 
       {/* Bottom Controls */}
       <div className="bg-gray-800 px-4 py-4">
-        {/* Message Input (always visible at bottom) */}
-        <div className="mb-3 max-w-2xl mx-auto">
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={messageInput}
-              onChange={(e) => setMessageInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-              placeholder="메시지 입력..."
-              className="flex-1 bg-gray-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button
-              onClick={handleSendMessage}
-              disabled={!messageInput.trim()}
-              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
-            >
-              전송
-            </button>
+        {/* Message Input (only visible when chat is visible) */}
+        {isChatVisible && (
+          <div className="mb-3 max-w-2xl mx-auto">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={messageInput}
+                onChange={(e) => setMessageInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                placeholder="메시지 입력..."
+                className="flex-1 bg-gray-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                onClick={handleSendMessage}
+                disabled={!messageInput.trim()}
+                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
+              >
+                전송
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Control Buttons */}
         <div className="grid grid-cols-3 items-center px-4">
@@ -1036,6 +1337,25 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, locale, mess
           </div>
         </div>
       )}
+
+      {/* Points Rule Help Button - Fixed Bottom Right */}
+      <button
+        onClick={() => setIsPointsRuleModalOpen(true)}
+        className="absolute bottom-6 right-6 w-12 h-12 md:w-14 md:h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110 z-40"
+        aria-label="Points Rules"
+      >
+        <svg className="w-6 h-6 md:w-7 md:h-7" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+        </svg>
+      </button>
+
+      {/* Points Rule Modal */}
+      <PointsRuleModal
+        isOpen={isPointsRuleModalOpen}
+        onClose={() => setIsPointsRuleModalOpen(false)}
+        locale={locale}
+        roomType={room.callType}
+      />
     </div>
   );
 }
