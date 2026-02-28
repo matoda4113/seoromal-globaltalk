@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
-import type { Locale } from '@/lib/i18n';
-import { resolveLocale, setStoredLocale } from '@/lib/locale-storage';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
+import LanguageSelector from '@/components/LanguageSelector';
 import pointsService, { type PointHistory } from '@/services/points.service';
 import logger from '@/lib/logger';
 
@@ -60,20 +60,12 @@ const translations = {
 };
 
 export default function PointsHistoryPage() {
-  const searchParams = useSearchParams();
   const router = useRouter();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
-  const [locale, setLocale] = useState<Locale>('en');
+  const { currentLanguage } = useGlobalSettings();
   const [totalPoints, setTotalPoints] = useState(0);
   const [history, setHistory] = useState<PointHistory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const langParam = searchParams.get('lang');
-    const resolvedLocale = resolveLocale(langParam);
-    setLocale(resolvedLocale);
-    setStoredLocale(resolvedLocale);
-  }, [searchParams]);
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
@@ -96,15 +88,7 @@ export default function PointsHistoryPage() {
     }
   };
 
-  const pageT = translations[locale];
-
-  const handleLocaleChange = (newLocale: Locale) => {
-    setLocale(newLocale);
-    setStoredLocale(newLocale);
-    const url = new URL(window.location.href);
-    url.searchParams.set('lang', newLocale);
-    window.history.pushState({}, '', url);
-  };
+  const pageT = translations[currentLanguage];
 
   const getTypeText = (type: string) => {
     const typeMap: { [key: string]: string } = {
@@ -124,7 +108,7 @@ export default function PointsHistoryPage() {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString(locale, {
+    return date.toLocaleDateString(currentLanguage, {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -151,26 +135,7 @@ export default function PointsHistoryPage() {
       <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pb-20">
         <header className="px-4 py-3 flex justify-between items-center border-b border-gray-200 bg-white sticky top-0 z-50">
           <div className="text-lg sm:text-xl font-bold text-blue-600">서로말</div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => handleLocaleChange('ko')}
-              className={`px-2 py-1 text-xs sm:text-sm rounded ${locale === 'ko' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}
-            >
-              KO
-            </button>
-            <button
-              onClick={() => handleLocaleChange('en')}
-              className={`px-2 py-1 text-xs sm:text-sm rounded ${locale === 'en' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}
-            >
-              EN
-            </button>
-            <button
-              onClick={() => handleLocaleChange('ja')}
-              className={`px-2 py-1 text-xs sm:text-sm rounded ${locale === 'ja' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}
-            >
-              JA
-            </button>
-          </div>
+          <LanguageSelector />
         </header>
 
         <main className="px-4 py-6 flex items-center justify-center" style={{ minHeight: 'calc(100vh - 140px)' }}>
@@ -178,7 +143,7 @@ export default function PointsHistoryPage() {
             <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">{pageT.loginRequired}</h2>
               <button
-                onClick={() => router.push(`/login?lang=${locale}`)}
+                onClick={() => router.push('/login')}
                 className="w-full mt-6 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors active:scale-95"
               >
                 {pageT.goBack}
@@ -203,26 +168,7 @@ export default function PointsHistoryPage() {
           </svg>
           {pageT.goBack}
         </button>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => handleLocaleChange('ko')}
-            className={`px-2 py-1 text-xs sm:text-sm rounded ${locale === 'ko' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}
-          >
-            KO
-          </button>
-          <button
-            onClick={() => handleLocaleChange('en')}
-            className={`px-2 py-1 text-xs sm:text-sm rounded ${locale === 'en' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}
-          >
-            EN
-          </button>
-          <button
-            onClick={() => handleLocaleChange('ja')}
-            className={`px-2 py-1 text-xs sm:text-sm rounded ${locale === 'ja' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}
-          >
-            JA
-          </button>
-        </div>
+        <LanguageSelector />
       </header>
 
       <main className="px-4 py-6 max-w-2xl mx-auto">

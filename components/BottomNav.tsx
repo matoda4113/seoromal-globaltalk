@@ -1,11 +1,8 @@
 'use client';
 
-import { type Locale } from '@/lib/i18n';
-
 export type TabType = 'home' | 'community' | 'mypage';
 
 interface BottomNavProps {
-  locale: Locale;
   homeText: string;
   communityText: string;
   mypageText: string;
@@ -14,7 +11,6 @@ interface BottomNavProps {
 }
 
 export default function BottomNav({
-  locale,
   homeText,
   communityText,
   mypageText,
@@ -23,7 +19,7 @@ export default function BottomNav({
 }: BottomNavProps) {
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-20">
       <div className="flex justify-around items-center h-16">
         {/* Home */}
         <button

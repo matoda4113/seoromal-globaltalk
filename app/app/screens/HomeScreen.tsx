@@ -1,50 +1,128 @@
-import { useState } from 'react';
-import { type Room } from '@/hooks/useSocket';
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useSocket, type Room } from '@/hooks/useSocket';
+import { useAuth } from '@/contexts/AuthContext';
+import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
 import RoomCard from '../components/RoomCard';
 import FilterOption from '../components/FilterOption';
 import CreateRoomModal from '../components/CreateRoomModal';
 import BottomSheet from '../components/BottomSheet';
 import OnlineUsersModal from '../components/OnlineUsersModal';
+import RoomModal from '../components/RoomModal';
+import RatingModal from '@/components/RatingModal';
+import logger from '@/lib/logger';
+import ratingsService from '@/services/ratings.service';
 
-interface OnlineCount {
-  total: number;
-  authenticated: number;
-  anonymous: number;
-  authenticatedUsers: any[];
-}
+const translations = {
+  ko: {
+    title: '활성 방 목록',
+    createRoom: '방 만들기',
+    noRooms: '현재 활성화된 방이 없습니다',
+    noRoomsDesc: '첫 번째 방을 만들어보세요!',
+    joinRoom: '입장하기',
+    participants: '명 참여 중',
+    filters: {
+      language: '언어',
+      topic: '주제',
+      all: '전체',
+      ko: '한국어',
+      en: '영어',
+      ja: '일본어',
+      free: '자유',
+      romance: '연애',
+      hobby: '취미',
+      business: '비즈니스',
+      travel: '여행',
+    },
+  },
+  en: {
+    title: 'Active Rooms',
+    createRoom: 'Create Room',
+    noRooms: 'No active rooms',
+    noRoomsDesc: 'Be the first to create a room!',
+    joinRoom: 'Join',
+    participants: 'participants',
+    filters: {
+      language: 'Language',
+      topic: 'Topic',
+      all: 'All',
+      ko: 'Korean',
+      en: 'English',
+      ja: 'Japanese',
+      free: 'Free Talk',
+      romance: 'Romance',
+      hobby: 'Hobby',
+      business: 'Business',
+      travel: 'Travel',
+    },
+  },
+  ja: {
+    title: 'アクティブルーム',
+    createRoom: 'ルーム作成',
+    noRooms: '現在アクティブなルームがありません',
+    noRoomsDesc: '最初のルームを作成してみましょう！',
+    joinRoom: '入室する',
+    participants: '人参加中',
+    filters: {
+      language: '言語',
+      topic: 'トピック',
+      all: '全体',
+      ko: '韓国語',
+      en: '英語',
+      ja: '日本語',
+      free: '自由',
+      romance: '恋愛',
+      hobby: '趣味',
+      business: 'ビジネス',
+      travel: '旅行',
+    },
+  },
+};
 
-interface HomeScreenProps {
-  rooms: Room[];
-  onlineCount: OnlineCount;
-  t: any;
-  locale: 'ko' | 'en' | 'ja';
-  onCreateRoom: (roomData: {
-    title: string;
-    topic: string;
-    roomType: 'voice' | 'video';
-    maxParticipants: number;
-    isPrivate: boolean;
-    password?: string;
-  }) => void;
-  onJoinRoom: (roomId: string, nickname?: string, password?: string) => void;
-  currentUserId?: number | null;
-}
-
-export default function HomeScreen({
-  rooms,
-  onlineCount,
-  t,
-  locale,
-  onCreateRoom,
-  onJoinRoom,
-  currentUserId,
-}: HomeScreenProps) {
-  const [languageFilter, setLanguageFilter] = useState<string>('all');
-  const [topicFilter, setTopicFilter] = useState<string>('all');
+export default function HomeScreen() {
+  const { user } = useAuth();
+  const { currentLanguage } = useGlobalSettings();
+  const {
+    rooms,
+    onlineCount,
+    createRoom,
+    currentRoom,
+    leaveRoom,
+    joinRoom,
+    messages,
+    sendMessage,
+    ratingModalData,
+    setRatingModalData,
+    guestBalance,
+    giftNotification
+  } = useSocket();
+  const [languageFilter, setLanguageFilter] = useState<'all' | 'ko' | 'en' | 'ja'>('all');
+  const [topicFilter, setTopicFilter] = useState<'all' | 'free' | 'romance' | 'hobby' | 'business' | 'travel'>('all');
   const [isLanguageSheetOpen, setIsLanguageSheetOpen] = useState(false);
   const [isTopicSheetOpen, setIsTopicSheetOpen] = useState(false);
   const [isOnlineUsersModalOpen, setIsOnlineUsersModalOpen] = useState(false);
   const [isCreateRoomModalOpen, setIsCreateRoomModalOpen] = useState(false);
+  const [isRoomModalOpen, setIsRoomModalOpen] = useState(false);
+  const [currentRoomForModal, setCurrentRoomForModal] = useState<Room | null>(null);
+
+  const t = translations[currentLanguage];
+
+  // currentRoom이 변경되면 RoomModal 열기/닫기
+  useEffect(() => {
+    if (currentRoom) {
+      setCurrentRoomForModal(currentRoom);
+      setIsRoomModalOpen(true);
+    } else {
+      // currentRoom이 null이 되면 모달 닫기
+      // history state 정리 (강제 종료 시)
+      if (typeof window !== 'undefined' && window.history.state?.modal === 'room') {
+        window.history.replaceState(null, '', '/app');
+      }
+      setIsRoomModalOpen(false);
+      setCurrentRoomForModal(null);
+    }
+  }, [currentRoom]);
 
   // 필터링된 방 목록
   const filteredRooms = rooms.filter((room) => {
@@ -52,6 +130,25 @@ export default function HomeScreen({
     const topicMatch = topicFilter === 'all' || room.topic === topicFilter;
     return languageMatch && topicMatch;
   });
+
+  // 방 생성 핸들러
+  const handleCreateRoom = (roomData: {
+    title: string;
+    topic: string;
+    roomType: 'audio' | 'video';
+    maxParticipants: number;
+    isPrivate: boolean;
+    password?: string;
+  }) => {
+    createRoom({
+      title: roomData.title,
+      language: currentLanguage,
+      topic: roomData.topic,
+      roomType: roomData.roomType,
+      isPrivate: roomData.isPrivate,
+      password: roomData.password,
+    });
+  };
 
   // 방 입장 핸들러 (비밀방이면 비밀번호 입력)
   const handleJoinRoom = (roomId: string) => {
@@ -61,10 +158,10 @@ export default function HomeScreen({
     // 비밀방인 경우 비밀번호 입력
     if (room.isPrivate) {
       const password = prompt(
-        locale === 'ko'
+        currentLanguage === 'ko'
           ? '비밀번호를 입력하세요:'
-          : locale === 'ja'
-          ? 'パスワードを入力してください:'
+          : currentLanguage === 'ja'
+          ? 'パスワードを入력してください:'
           : 'Enter password:'
       );
 
@@ -73,10 +170,35 @@ export default function HomeScreen({
         return;
       }
 
-      onJoinRoom(roomId, undefined, password);
+      joinRoom(roomId, undefined, password);
     } else {
       // 일반 방
-      onJoinRoom(roomId);
+      joinRoom(roomId);
+    }
+  };
+
+  // 평가 제출 핸들러
+  const handleRatingSubmit = async (rating: number, comment: string) => {
+    if (!ratingModalData?.hostUserId || !user?.userId) {
+      logger.error('❌ 평가 제출 실패: 호스트 또는 사용자 정보 없음');
+      return;
+    }
+
+    try {
+      logger.log(`⭐ 평가 제출: ${rating}점, 호스트 ${ratingModalData.hostUserId}`);
+
+      await ratingsService.submitRating({
+        ratedUserId: ratingModalData.hostUserId,
+        raterUserId: user.userId,
+        ratingScore: rating,
+        ratingComment: comment || undefined,
+      });
+
+      logger.log('⭐ 평가 제출 성공');
+      alert('평가가 제출되었습니다. 감사합니다!');
+    } catch (error) {
+      logger.error('❌ 평가 제출 실패:', error);
+      alert('평가 제출에 실패했습니다. 다시 시도해주세요.');
     }
   };
 
@@ -86,7 +208,7 @@ export default function HomeScreen({
       <div className="flex justify-between items-center mb-4">
         <div className="flex items-center gap-2">
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
-            {t.app.title}
+            {t.title}
           </h1>
           <button
             onClick={() => setIsOnlineUsersModalOpen(true)}
@@ -100,7 +222,7 @@ export default function HomeScreen({
           onClick={() => setIsCreateRoomModalOpen(true)}
           className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors shadow-md active:scale-95 min-h-[44px]"
         >
-          {t.app.createRoom}
+          {t.createRoom}
         </button>
       </div>
 
@@ -116,7 +238,7 @@ export default function HomeScreen({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
             </svg>
             <span className="text-sm font-medium text-gray-700">
-              {languageFilter === 'all' ? t.app.filters.language : t.app.filters[languageFilter as keyof typeof t.app.filters]}
+              {languageFilter === 'all' ? t.filters.language : t.filters[languageFilter as keyof typeof t.filters]}
             </span>
           </div>
           <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -134,7 +256,7 @@ export default function HomeScreen({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
             </svg>
             <span className="text-sm font-medium text-gray-700">
-              {topicFilter === 'all' ? t.app.filters.topic : t.app.filters[topicFilter as keyof typeof t.app.filters]}
+              {topicFilter === 'all' ? t.filters.topic : t.filters[topicFilter as keyof typeof t.filters]}
             </span>
           </div>
           <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -148,9 +270,9 @@ export default function HomeScreen({
         <div className="text-center py-16">
           <div className="text-6xl mb-4">🏠</div>
           <h2 className="text-lg font-bold text-gray-700 mb-2">
-            {t.app.noRooms}
+            {t.noRooms}
           </h2>
-          <p className="text-sm text-gray-500">{t.app.noRoomsDesc}</p>
+          <p className="text-sm text-gray-500">{t.noRoomsDesc}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -158,12 +280,8 @@ export default function HomeScreen({
             <RoomCard
               key={room.id}
               room={room}
-              joinText={t.app.joinRoom}
-              participantsText={t.app.participants}
-              languageText={t.app.filters[room.language as keyof typeof t.app.filters] as string}
-              topicText={t.app.filters[room.topic as keyof typeof t.app.filters] as string}
               onJoin={handleJoinRoom}
-              currentUserId={currentUserId}
+              currentUserId={user?.userId}
             />
           ))}
         </div>
@@ -173,11 +291,11 @@ export default function HomeScreen({
       <BottomSheet
         isOpen={isLanguageSheetOpen}
         onClose={() => setIsLanguageSheetOpen(false)}
-        title={t.app.filters.language}
+        title={t.filters.language}
       >
         <div className="space-y-2">
           <FilterOption
-            label={t.app.filters.all}
+            label={t.filters.all}
             active={languageFilter === 'all'}
             onClick={() => {
               setLanguageFilter('all');
@@ -185,26 +303,26 @@ export default function HomeScreen({
             }}
           />
           <FilterOption
-            label={t.app.filters.korean}
-            active={languageFilter === 'korean'}
+            label={t.filters.ko}
+            active={languageFilter === 'ko'}
             onClick={() => {
-              setLanguageFilter('korean');
+              setLanguageFilter('ko');
               setIsLanguageSheetOpen(false);
             }}
           />
           <FilterOption
-            label={t.app.filters.english}
-            active={languageFilter === 'english'}
+            label={t.filters.en}
+            active={languageFilter === 'en'}
             onClick={() => {
-              setLanguageFilter('english');
+              setLanguageFilter('en');
               setIsLanguageSheetOpen(false);
             }}
           />
           <FilterOption
-            label={t.app.filters.japanese}
-            active={languageFilter === 'japanese'}
+            label={t.filters.ja}
+            active={languageFilter === 'ja'}
             onClick={() => {
-              setLanguageFilter('japanese');
+              setLanguageFilter('ja');
               setIsLanguageSheetOpen(false);
             }}
           />
@@ -215,11 +333,11 @@ export default function HomeScreen({
       <BottomSheet
         isOpen={isTopicSheetOpen}
         onClose={() => setIsTopicSheetOpen(false)}
-        title={t.app.filters.topic}
+        title={t.filters.topic}
       >
         <div className="space-y-2">
           <FilterOption
-            label={t.app.filters.all}
+            label={t.filters.all}
             active={topicFilter === 'all'}
             onClick={() => {
               setTopicFilter('all');
@@ -227,7 +345,7 @@ export default function HomeScreen({
             }}
           />
           <FilterOption
-            label={t.app.filters.free}
+            label={t.filters.free}
             active={topicFilter === 'free'}
             onClick={() => {
               setTopicFilter('free');
@@ -235,7 +353,7 @@ export default function HomeScreen({
             }}
           />
           <FilterOption
-            label={t.app.filters.romance}
+            label={t.filters.romance}
             active={topicFilter === 'romance'}
             onClick={() => {
               setTopicFilter('romance');
@@ -243,7 +361,7 @@ export default function HomeScreen({
             }}
           />
           <FilterOption
-            label={t.app.filters.hobby}
+            label={t.filters.hobby}
             active={topicFilter === 'hobby'}
             onClick={() => {
               setTopicFilter('hobby');
@@ -251,7 +369,7 @@ export default function HomeScreen({
             }}
           />
           <FilterOption
-            label={t.app.filters.business}
+            label={t.filters.business}
             active={topicFilter === 'business'}
             onClick={() => {
               setTopicFilter('business');
@@ -259,7 +377,7 @@ export default function HomeScreen({
             }}
           />
           <FilterOption
-            label={t.app.filters.travel}
+            label={t.filters.travel}
             active={topicFilter === 'travel'}
             onClick={() => {
               setTopicFilter('travel');
@@ -275,16 +393,41 @@ export default function HomeScreen({
         onClose={() => setIsOnlineUsersModalOpen(false)}
         authenticatedUsers={onlineCount.authenticatedUsers || []}
         anonymousCount={onlineCount.anonymous || 0}
-        locale={locale}
       />
 
       {/* Create Room Modal */}
       <CreateRoomModal
         isOpen={isCreateRoomModalOpen}
         onClose={() => setIsCreateRoomModalOpen(false)}
-        onCreate={onCreateRoom}
-        locale={locale}
+        onCreate={handleCreateRoom}
       />
+
+      {/* Room Modal (전체 화면) */}
+      {currentRoomForModal && (
+        <RoomModal
+          isOpen={isRoomModalOpen}
+          onClose={() => {
+            setIsRoomModalOpen(false);
+            setCurrentRoomForModal(null);
+          }}
+          onLeave={leaveRoom}
+          room={currentRoomForModal}
+          messages={messages}
+          onSendMessage={sendMessage}
+          guestBalance={guestBalance}
+          giftNotification={giftNotification}
+        />
+      )}
+
+      {/* Rating Modal (호스트 평가) */}
+      {ratingModalData?.show && ratingModalData.hostUserId && (
+        <RatingModal
+          hostUserId={ratingModalData.hostUserId}
+          onClose={() => setRatingModalData(null)}
+          onSubmit={handleRatingSubmit}
+          message={ratingModalData.message}
+        />
+      )}
     </>
   );
 }

@@ -1,27 +1,76 @@
+'use client';
+
 import { Room } from '@/hooks/useSocket';
+import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
+
+const translations = {
+  ko: {
+    joinRoom: '입장하기',
+    participants: '명 참여 중',
+    alreadyJoined: '참가 중',
+    filters: {
+      ko: '한국어',
+      en: '영어',
+      ja: '일본어',
+      free: '자유',
+      romance: '연애',
+      hobby: '취미',
+      business: '비즈니스',
+      travel: '여행',
+    },
+  },
+  en: {
+    joinRoom: 'Join',
+    participants: 'participants',
+    alreadyJoined: 'Joined',
+    filters: {
+      ko: 'Korean',
+      en: 'English',
+      ja: 'Japanese',
+      free: 'Free Talk',
+      romance: 'Romance',
+      hobby: 'Hobby',
+      business: 'Business',
+      travel: 'Travel',
+    },
+  },
+  ja: {
+    joinRoom: '入室する',
+    participants: '人参加中',
+    alreadyJoined: '参加中',
+    filters: {
+      ko: '韓国語',
+      en: '英語',
+      ja: '日本語',
+      free: '自由',
+      romance: '恋愛',
+      hobby: '趣味',
+      business: 'ビジネス',
+      travel: '旅行',
+    },
+  },
+};
 
 interface RoomCardProps {
   room: Room;
-  joinText: string;
-  participantsText: string;
-  languageText: string;
-  topicText: string;
   onJoin: (roomId: string) => void;
   currentUserId?: number | null; // 현재 로그인한 사용자 ID
 }
 
 export default function RoomCard({
   room,
-  joinText,
-  participantsText,
-  languageText,
-  topicText,
   onJoin,
   currentUserId,
 }: RoomCardProps) {
+  const { currentLanguage } = useGlobalSettings();
+  const t = translations[currentLanguage];
+
   // 이미 참가 중인지 확인
   const isAlreadyJoined = room.participants.some(p => p.userId === currentUserId);
   const isFull = room.participants.length >= room.maxParticipants;
+
+  const languageText = t.filters[room.language as keyof typeof t.filters] as string;
+  const topicText = t.filters[room.topic as keyof typeof t.filters] as string;
   return (
     <div className="bg-white p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow border border-gray-200">
       {/* Room Title */}
@@ -81,14 +130,14 @@ export default function RoomCard({
       {/* Bottom Section */}
       <div className="flex justify-between items-center pt-3 border-t border-gray-100">
         <div className="text-xs text-gray-600">
-          {room.participants.length}/{room.maxParticipants} {participantsText}
+          {room.participants.length}/{room.maxParticipants} {t.participants}
         </div>
         <button
           onClick={() => onJoin(room.id)}
           disabled={isFull || isAlreadyJoined}
           className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-700 transition-colors active:scale-95 min-h-[40px] disabled:bg-gray-400 disabled:cursor-not-allowed"
         >
-          {isAlreadyJoined ? '참가 중' : joinText}
+          {isAlreadyJoined ? t.alreadyJoined : t.joinRoom}
         </button>
       </div>
     </div>

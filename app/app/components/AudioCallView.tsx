@@ -1,0 +1,110 @@
+'use client';
+
+import { Room } from '@/hooks/useSocket';
+import { useAuth } from '@/contexts/AuthContext';
+import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
+
+const translations = {
+  ko: {
+    host: 'Host',
+    guest: 'Guest',
+  },
+  en: {
+    host: 'Host',
+    guest: 'Guest',
+  },
+  ja: {
+    host: 'Host',
+    guest: 'Guest',
+  },
+};
+
+interface AudioCallViewProps {
+  room: Room;
+  localVolume: number;
+  remoteVolume: number;
+  microphones: MediaDeviceInfo[];
+  selectedMicId: string;
+  changeMicrophone: (deviceId: string) => void;
+}
+
+export default function AudioCallView({
+  room,
+  localVolume,
+  remoteVolume,
+  microphones,
+  selectedMicId,
+  changeMicrophone,
+}: AudioCallViewProps) {
+  const { user } = useAuth();
+  const { currentLanguage } = useGlobalSettings();
+  const t = translations[currentLanguage];
+
+  return (
+    <div className="w-full px-8">
+      <div className="flex flex-col items-center gap-6">
+          {/* 참가자 프로필 */}
+          <div className="flex justify-center items-center gap-[30px] max-w-4xl mx-auto">
+            {room.participants.map((participant) => {
+              // 현재 참가자가 말하고 있는지 확인 (임계값: 0.1 이상)
+              const isMe = participant.userId === user?.userId;
+              const VOLUME_THRESHOLD = 0.1; // 백그라운드 노이즈 필터링
+              const isSpeaking = isMe ? (localVolume > VOLUME_THRESHOLD) : (remoteVolume > VOLUME_THRESHOLD);
+
+              return (
+                <div key={participant.socketId} className="text-center">
+                  <div className="relative">
+                    {/* 말하는 중일 때 애니메이션 링 */}
+                    {isSpeaking && (
+                      <>
+                        <div className="absolute inset-0 w-20 h-20 rounded-full bg-green-500 opacity-30 animate-ping"></div>
+                        <div className="absolute inset-0 w-20 h-20 rounded-full border-4 border-green-400 animate-pulse"></div>
+                      </>
+                    )}
+                    {/* 프로필 이미지 */}
+                    <div className={`w-20 h-20 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white text-2xl font-bold mb-3 overflow-hidden relative ${
+                      isSpeaking ? 'ring-4 ring-green-400 shadow-lg shadow-green-500/50' : ''
+                    }`}>
+                      {participant.profileImageUrl ? (
+                        <img
+                          src={participant.profileImageUrl}
+                          alt={participant.nickname}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        participant.nickname[0].toUpperCase()
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-white text-lg font-semibold mb-1">{participant.nickname}</p>
+                  <span className={`inline-block ${participant.isHost ? 'bg-yellow-500' : 'bg-gray-600'} text-white px-2 py-1 rounded text-xs`}>
+                    {participant.isHost ? t.host : t.guest}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* 마이크 선택 (PC only) */}
+          {microphones.length > 1 && (
+            <div className="hidden md:flex items-center gap-3 bg-gray-800/50 px-4 py-3 rounded-lg">
+              <svg className="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
+              </svg>
+              <select
+                value={selectedMicId}
+                onChange={(e) => changeMicrophone(e.target.value)}
+                className="bg-gray-700 text-white text-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {microphones.map((mic) => (
+                  <option key={mic.deviceId} value={mic.deviceId}>
+                    {mic.label || `마이크 ${mic.deviceId.slice(0, 8)}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+      </div>
+    </div>
+  );
+}

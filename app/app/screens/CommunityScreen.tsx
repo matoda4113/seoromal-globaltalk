@@ -1,25 +1,40 @@
-import { type Locale } from '@/lib/i18n';
+'use client';
 
-interface CommunityScreenProps {
-  locale: Locale;
-  t: any;
-}
+import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
 
-export default function CommunityScreen({ locale, t }: CommunityScreenProps) {
+const translations = {
+  ko: {
+    title: '커뮤니티',
+    comingSoon: '곧 만나요!',
+  },
+  en: {
+    title: 'Community',
+    comingSoon: 'Coming Soon',
+  },
+  ja: {
+    title: 'コミュニティ',
+    comingSoon: '近日公開！',
+  },
+};
+
+export default function CommunityScreen() {
+  const { currentLanguage } = useGlobalSettings();
+  const t = translations[currentLanguage];
+
   return (
     <>
       <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">
-        {t.app.nav.community}
+        {t.title}
       </h1>
 
       {/* Placeholder */}
       <div className="text-center py-16">
         <div className="text-6xl mb-4">💬</div>
         <h2 className="text-lg font-bold text-gray-700 mb-2">
-          {locale === 'ko' ? '커뮤니티' : locale === 'ja' ? 'コミュニティ' : 'Community'}
+          {t.title}
         </h2>
         <p className="text-sm text-gray-500">
-          {locale === 'ko' ? '곧 만나요!' : locale === 'ja' ? '近日公開！' : 'Coming Soon'}
+          {t.comingSoon}
         </p>
       </div>
     </>

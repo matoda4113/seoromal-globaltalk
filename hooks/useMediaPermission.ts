@@ -5,7 +5,7 @@ export type MediaPermissionStatus = 'idle' | 'requesting' | 'granted' | 'denied'
 interface UseMediaPermissionReturn {
   status: MediaPermissionStatus;
   error: string | null;
-  requestPermission: (roomType: 'voice' | 'video') => Promise<boolean>;
+  requestPermission: (roomType: 'audio' | 'video') => Promise<boolean>;
   resetPermission: () => void;
 }
 
@@ -13,7 +13,7 @@ export function useMediaPermission(): UseMediaPermissionReturn {
   const [status, setStatus] = useState<MediaPermissionStatus>('idle');
   const [error, setError] = useState<string | null>(null);
 
-  const requestPermission = useCallback(async (roomType: 'voice' | 'video'): Promise<boolean> => {
+  const requestPermission = useCallback(async (roomType: 'audio' | 'video'): Promise<boolean> => {
     setStatus('requesting');
     setError(null);
 

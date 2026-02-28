@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { type Locale } from '@/lib/i18n';
+import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
 import { useMediaPermission } from '@/hooks/useMediaPermission';
 
 interface CreateRoomModalProps {
@@ -10,12 +10,11 @@ interface CreateRoomModalProps {
   onCreate: (roomData: {
     title: string;
     topic: string;
-    roomType: 'voice' | 'video';
+    roomType: 'audio' | 'video';
     maxParticipants: number;
     isPrivate: boolean;
     password?: string;
   }) => void;
-  locale: Locale;
 }
 
 const translations = {
@@ -109,17 +108,17 @@ export default function CreateRoomModal({
   isOpen,
   onClose,
   onCreate,
-  locale,
 }: CreateRoomModalProps) {
+  const { currentLanguage } = useGlobalSettings();
   const [roomTitle, setRoomTitle] = useState('');
   const [topic, setTopic] = useState<'free' | 'romance' | 'hobby' | 'business' | 'travel'>('free');
-  const [roomType, setRoomType] = useState<'voice' | 'video'>('voice');
+  const [roomType, setRoomType] = useState<'audio' | 'video'>('audio');
   const [isPrivate, setIsPrivate] = useState(false);
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const { status, error: permissionError, requestPermission, resetPermission } = useMediaPermission();
 
-  const t = translations[locale];
+  const t = translations[currentLanguage];
 
   const handleSubmit = async () => {
     const newErrors: { [key: string]: string } = {};
@@ -167,7 +166,7 @@ export default function CreateRoomModal({
   const handleClose = () => {
     setRoomTitle('');
     setTopic('free');
-    setRoomType('voice');
+    setRoomType('audio');
     setIsPrivate(false);
     setPassword('');
     setErrors({});
@@ -292,9 +291,9 @@ export default function CreateRoomModal({
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => setRoomType('voice')}
+                onClick={() => setRoomType('audio')}
                 className={`flex-1 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                  roomType === 'voice'
+                  roomType === 'audio'
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
@@ -397,9 +396,9 @@ export default function CreateRoomModal({
               <div className="flex-1">
                 <p className="text-sm text-red-800 font-medium">{errors.permission}</p>
                 <p className="text-xs text-red-600 mt-1">
-                  {locale === 'ko' && '브라우저 설정에서 권한을 허용해주세요.'}
-                  {locale === 'en' && 'Please allow permission in your browser settings.'}
-                  {locale === 'ja' && 'ブラウザの設定で許可してください。'}
+                  {currentLanguage === 'ko' && '브라우저 설정에서 권한을 허용해주세요.'}
+                  {currentLanguage === 'en' && 'Please allow permission in your browser settings.'}
+                  {currentLanguage === 'ja' && 'ブラウザの設定で許可してください。'}
                 </p>
               </div>
             </div>

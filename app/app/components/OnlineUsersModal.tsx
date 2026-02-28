@@ -1,3 +1,6 @@
+'use client';
+
+import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
 import { User } from '@/types/user';
 
 interface OnlineUsersModalProps {
@@ -5,7 +8,6 @@ interface OnlineUsersModalProps {
   onClose: () => void;
   authenticatedUsers: User[];
   anonymousCount: number;
-  locale: 'ko' | 'en' | 'ja';
 }
 
 const translations = {
@@ -40,23 +42,23 @@ export default function OnlineUsersModal({
   onClose,
   authenticatedUsers = [],
   anonymousCount = 0,
-  locale,
 }: OnlineUsersModalProps) {
-  const t = translations[locale];
+  const { currentLanguage } = useGlobalSettings();
+  const t = translations[currentLanguage];
 
   if (!isOpen) return null;
 
   const getAgeGroupText = (age_group?: number | null) => {
     if (!age_group) return '';
-    if (locale === 'ko') return `${age_group}대`;
-    if (locale === 'ja') return `${age_group}代`;
+    if (currentLanguage === 'ko') return `${age_group}대`;
+    if (currentLanguage === 'ja') return `${age_group}代`;
     return `${age_group}s`;
   };
 
   const getGenderText = (gender?: string | null) => {
     if (!gender) return '';
-    if (locale === 'ko') return gender === 'man' ? '남' : '여';
-    if (locale === 'ja') return gender === 'man' ? '男' : '女';
+    if (currentLanguage === 'ko') return gender === 'man' ? '남' : '여';
+    if (currentLanguage === 'ja') return gender === 'man' ? '男' : '女';
     return gender === 'man' ? 'M' : 'F';
   };
 

@@ -1,7 +1,10 @@
+'use client';
+
+import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
+
 interface PointsRuleModalProps {
   isOpen: boolean;
   onClose: () => void;
-  locale: 'ko' | 'en' | 'ja';
   roomType?: 'audio' | 'video';
 }
 
@@ -101,8 +104,9 @@ const translations = {
   },
 };
 
-export default function PointsRuleModal({ isOpen, onClose, locale, roomType }: PointsRuleModalProps) {
-  const t = translations[locale];
+export default function PointsRuleModal({ isOpen, onClose, roomType }: PointsRuleModalProps) {
+  const { currentLanguage } = useGlobalSettings();
+  const t = translations[currentLanguage];
 
   if (!isOpen) return null;
 

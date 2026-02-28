@@ -2,6 +2,52 @@
 
 import { useState } from 'react';
 import logger from '@/lib/logger';
+import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
+
+const translations = {
+  ko: {
+    title: '호스트 평가',
+    description: '통화가 어떠셨나요? 호스트를 평가해주세요.',
+    selectRating: '별점을 선택해주세요',
+    veryDissatisfied: '😞 매우 불만족',
+    dissatisfied: '😕 불만족',
+    neutral: '😐 보통',
+    satisfied: '😊 만족',
+    verySatisfied: '😍 매우 만족',
+    commentLabel: '코멘트 (선택사항)',
+    commentPlaceholder: '호스트에게 전하고 싶은 말을 남겨주세요...',
+    skip: '건너뛰기',
+    submit: '평가 제출',
+  },
+  en: {
+    title: 'Rate Host',
+    description: 'How was your call? Please rate the host.',
+    selectRating: 'Please select a rating',
+    veryDissatisfied: '😞 Very Dissatisfied',
+    dissatisfied: '😕 Dissatisfied',
+    neutral: '😐 Neutral',
+    satisfied: '😊 Satisfied',
+    verySatisfied: '😍 Very Satisfied',
+    commentLabel: 'Comment (Optional)',
+    commentPlaceholder: 'Leave a message for the host...',
+    skip: 'Skip',
+    submit: 'Submit Rating',
+  },
+  ja: {
+    title: 'ホスト評価',
+    description: '通話はいかがでしたか？ホストを評価してください。',
+    selectRating: '星を選択してください',
+    veryDissatisfied: '😞 非常に不満',
+    dissatisfied: '😕 不満',
+    neutral: '😐 普通',
+    satisfied: '😊 満足',
+    verySatisfied: '😍 非常に満足',
+    commentLabel: 'コメント（任意）',
+    commentPlaceholder: 'ホストに伝えたいことを書いてください...',
+    skip: 'スキップ',
+    submit: '評価を送信',
+  },
+};
 
 interface RatingModalProps {
   hostUserId: number;
@@ -11,13 +57,15 @@ interface RatingModalProps {
 }
 
 export default function RatingModal({ hostUserId, onClose, onSubmit, message }: RatingModalProps) {
+  const { currentLanguage } = useGlobalSettings();
+  const t = translations[currentLanguage];
   const [rating, setRating] = useState<number>(0);
   const [comment, setComment] = useState('');
   const [hoveredStar, setHoveredStar] = useState<number>(0);
 
   const handleSubmit = () => {
     if (rating === 0) {
-      alert('별점을 선택해주세요.');
+      alert(t.selectRating);
       return;
     }
 
@@ -36,11 +84,11 @@ export default function RatingModal({ hostUserId, onClose, onSubmit, message }: 
       <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 max-w-md w-full shadow-2xl">
         {/* 헤더 */}
         <div className="mb-6 text-center">
-          <h2 className="text-2xl font-bold text-white mb-2">호스트 평가</h2>
+          <h2 className="text-2xl font-bold text-white mb-2">{t.title}</h2>
           {message ? (
             <p className="text-yellow-400 text-sm mb-2">{message}</p>
           ) : null}
-          <p className="text-gray-400 text-sm">통화가 어떠셨나요? 호스트를 평가해주세요.</p>
+          <p className="text-gray-400 text-sm">{t.description}</p>
         </div>
 
         {/* 별점 선택 */}
@@ -76,24 +124,24 @@ export default function RatingModal({ hostUserId, onClose, onSubmit, message }: 
             ))}
           </div>
           <p className="text-center text-sm text-gray-400">
-            {rating === 0 && '별점을 선택해주세요'}
-            {rating === 1 && '😞 매우 불만족'}
-            {rating === 2 && '😕 불만족'}
-            {rating === 3 && '😐 보통'}
-            {rating === 4 && '😊 만족'}
-            {rating === 5 && '😍 매우 만족'}
+            {rating === 0 && t.selectRating}
+            {rating === 1 && t.veryDissatisfied}
+            {rating === 2 && t.dissatisfied}
+            {rating === 3 && t.neutral}
+            {rating === 4 && t.satisfied}
+            {rating === 5 && t.verySatisfied}
           </p>
         </div>
 
         {/* 코멘트 입력 */}
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-300 mb-2">
-            코멘트 (선택사항)
+            {t.commentLabel}
           </label>
           <textarea
             value={comment}
             onChange={(e) => setComment(e.target.value)}
-            placeholder="호스트에게 전하고 싶은 말을 남겨주세요..."
+            placeholder={t.commentPlaceholder}
             className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none"
             rows={4}
             maxLength={500}
@@ -107,14 +155,14 @@ export default function RatingModal({ hostUserId, onClose, onSubmit, message }: 
             onClick={handleSkip}
             className="flex-1 px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors"
           >
-            건너뛰기
+            {t.skip}
           </button>
           <button
             onClick={handleSubmit}
             disabled={rating === 0}
             className="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
           >
-            평가 제출
+            {t.submit}
           </button>
         </div>
       </div>

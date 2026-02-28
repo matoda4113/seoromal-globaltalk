@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
+import { Locale } from '@/types/locale';
 import logger from '@/lib/logger';
-
-type Locale = 'ko' | 'en' | 'ja';
 
 const translations = {
   ko: {
@@ -65,11 +65,10 @@ const translations = {
 };
 
 export default function OnboardingPage() {
-  const searchParams = useSearchParams();
   const router = useRouter();
   const { user, refreshUser } = useAuth();
+  const { currentLanguage } = useGlobalSettings();
 
-  const [locale, setLocale] = useState<Locale>('ko');
   const [nickname, setNickname] = useState('');
   const [gender, setGender] = useState<string>('');
   const [ageGroup, setAgeGroup] = useState<number | null>(null);
@@ -77,19 +76,15 @@ export default function OnboardingPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    const lang = searchParams.get('lang') as Locale;
-    if (lang && ['ko', 'en', 'ja'].includes(lang)) {
-      setLocale(lang);
-    }
-
     // 사용자 정보 미리 채우기
     if (user) {
       setNickname(user.nickname || '');
       setGender(user.gender || '');
-      setAgeGroup(user.age_group || null);
+      setAgeGroup(user.ageGroup || null);
     }
-  }, [searchParams, user]);
+  }, [user]);
 
+  const locale = currentLanguage as Locale;
   const t = translations[locale];
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -125,7 +120,7 @@ export default function OnboardingPage() {
       logger.info('Profile updated successfully');
       await refreshUser();
 
-      router.push(`/app?lang=${locale}`);
+      router.push('/app');
     } catch (error) {
       logger.error('Failed to update profile:', error);
       alert('프로필 업데이트에 실패했습니다.');
@@ -135,7 +130,7 @@ export default function OnboardingPage() {
   };
 
   const handleSkip = () => {
-    router.push(`/app?lang=${locale}`);
+    router.push('/app');
   };
 
   return (

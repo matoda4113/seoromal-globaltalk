@@ -23,8 +23,8 @@ interface Room {
   hostId: number; // 항상 로그인한 사용자만 호스트 가능
   hostNickname: string;
   hostProfileImage?: string | null; // 호스트 프로필 이미지
-  language: string; // korean, english, japanese
-  topic: string; // free, romance, hobby, business, travel
+  language: 'ko' | 'en' | 'ja';
+  topic: 'free' | 'romance' | 'hobby' | 'business' | 'travel';
   callType: 'audio' | 'video'; // 오디오콜 or 비디오콜
   maxParticipants: number; // 현재는 2명 고정
   isPrivate: boolean; // 비공개 방 여부
@@ -533,9 +533,9 @@ export function initializeSocketHandlers(io: SocketIOServer) {
         hostId: user.userId,
         hostNickname: user.nickname??"host",
         hostProfileImage: user.profileImageUrl,
-        language: data.language,
-        topic: data.topic,
-        callType: data.roomType === 'voice' ? 'audio' : 'video',
+        language: data.language as 'ko' | 'en' | 'ja',
+        topic: data.topic as 'free' | 'romance' | 'hobby' | 'business' | 'travel',
+        callType: data.roomType as 'audio' | 'video',
         maxParticipants: 2,
         isPrivate: data.isPrivate,
         password: data.isPrivate ? data.password : undefined,
