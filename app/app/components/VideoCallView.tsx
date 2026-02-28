@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Room } from '@/hooks/useSocket';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
@@ -56,6 +56,17 @@ export default function VideoCallView({
   const { currentLanguage } = useGlobalSettings();
   const t = translations[currentLanguage];
   const [isPipMode, setIsPipMode] = useState(true);
+  const [remoteVideoFit, setRemoteVideoFit] = useState<'cover' | 'contain'>('cover');
+
+  // 상대방 비디오 object-fit 적용
+  useEffect(() => {
+    if (remoteVideoRef.current) {
+      const videoElement = remoteVideoRef.current.querySelector('video');
+      if (videoElement) {
+        videoElement.style.objectFit = remoteVideoFit;
+      }
+    }
+  }, [remoteVideoFit, remoteUsers]);
 
   // PIP 모드 전환 시 비디오 재연결 (prop으로 받은 함수 호출)
   const handlePipToggle = (newMode: boolean) => {
@@ -81,7 +92,7 @@ export default function VideoCallView({
             <div className="absolute inset-0 bg-gray-900">
               <div
                 ref={remoteVideoRef}
-                className="w-full h-full [&>video]:w-full [&>video]:h-full [&>video]:object-cover"
+                className="w-full h-full [&>video]:w-full [&>video]:h-full"
               />
               {/* 상대방이 없거나 비디오가 없을 때 플레이스홀더 */}
               {(!remoteUsers || remoteUsers.length === 0 || !remoteUsers[0]?.videoTrack) && (
@@ -104,8 +115,8 @@ export default function VideoCallView({
               )}
             </div>
 
-            {/* 내 비디오 - PIP (모바일: 왼쪽 아래, PC: 오른쪽 아래) */}
-            <div className="absolute bottom-4 left-4 md:left-auto md:right-4 w-32 h-48 md:w-48 md:h-64 bg-gray-800 rounded-lg overflow-hidden shadow-2xl z-10 border-2 border-white/30">
+            {/* 내 비디오 - PIP (왼쪽 아래) */}
+            <div className="absolute bottom-4 left-4 w-32 h-48 md:w-48 md:h-64 bg-gray-800 rounded-lg overflow-hidden shadow-2xl z-10 border-2 border-white/30">
               <div
                 ref={localVideoRef}
                 className={`w-full h-full [&>video]:w-full [&>video]:h-full ${
@@ -134,6 +145,21 @@ export default function VideoCallView({
 
             {/* PIP 모드 컨트롤 버튼들 - 하단 오른쪽 */}
             <div className="absolute bottom-4 right-4 z-20 flex items-center gap-3">
+              {/* 상대방 화면 fit 토글 버튼 */}
+              <button
+                onClick={() => setRemoteVideoFit(remoteVideoFit === 'cover' ? 'contain' : 'cover')}
+                className={`${
+                  remoteVideoFit === 'contain'
+                    ? 'bg-purple-600 hover:bg-purple-700'
+                    : 'bg-gray-900/80 hover:bg-gray-800'
+                } backdrop-blur-sm text-white p-3 rounded-full transition-colors shadow-lg`}
+                title={remoteVideoFit === 'cover' ? '전체 화면 보기' : '화면 맞춤'}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                </svg>
+              </button>
+
               {/* 화면 공유 버튼 */}
               <button
                 onClick={toggleScreenShare}
@@ -161,10 +187,10 @@ export default function VideoCallView({
               </button>
             </div>
 
-            {/* 마이크 & 카메라 선택 - PIP 창 안쪽 하단 (PC only) */}
+            {/* 마이크 & 카메라 선택 - PIP 창 위 (PC only) */}
             {(microphones.length > 1 || cameras.length > 1) && (
-              <div className="hidden md:block absolute bottom-6 left-6 md:left-auto md:right-6 z-20">
-                <div className="flex items-center gap-2 bg-gray-900/80 backdrop-blur-sm px-3 py-1.5 rounded-lg">
+              <div className="hidden md:block absolute bottom-[17rem] left-4 z-30">
+                <div className="flex flex-col gap-2 bg-gray-900/80 backdrop-blur-sm px-3 py-2 rounded-lg">
                   {/* 마이크 선택 */}
                   {microphones.length > 1 && (
                     <div className="flex items-center gap-1">
@@ -215,7 +241,7 @@ export default function VideoCallView({
             <div className="flex-1 bg-gray-900 relative overflow-hidden">
               <div
                 ref={remoteVideoRef}
-                className="w-full h-full [&>video]:w-full [&>video]:h-full [&>video]:object-cover"
+                className="w-full h-full [&>video]:w-full [&>video]:h-full"
               />
               {/* 상대방이 없거나 비디오가 없을 때 플레이스홀더 */}
               {(!remoteUsers || remoteUsers.length === 0 || !remoteUsers[0]?.videoTrack) && (
@@ -316,6 +342,21 @@ export default function VideoCallView({
 
             {/* 컨트롤 버튼들 - 하단 오른쪽 */}
             <div className="absolute bottom-4 right-4 z-20 flex items-center gap-3">
+              {/* 상대방 화면 fit 토글 버튼 */}
+              <button
+                onClick={() => setRemoteVideoFit(remoteVideoFit === 'cover' ? 'contain' : 'cover')}
+                className={`${
+                  remoteVideoFit === 'contain'
+                    ? 'bg-purple-600 hover:bg-purple-700'
+                    : 'bg-gray-900/80 hover:bg-gray-800'
+                } backdrop-blur-sm text-white p-3 rounded-full transition-colors shadow-lg`}
+                title={remoteVideoFit === 'cover' ? '전체 화면 보기' : '화면 맞춤'}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                </svg>
+              </button>
+
               {/* 화면 공유 버튼 */}
               <button
                 onClick={toggleScreenShare}

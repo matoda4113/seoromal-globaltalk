@@ -577,18 +577,26 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, messages, on
       if (isScreenSharing && screenTrackRef.current) {
         logger.log('🛑 Stopping screen share, switching to camera');
 
-        // 화면 공유 트랙 unpublish
-        await client.unpublish(screenTrackRef.current);
-        screenTrackRef.current.close();
-        screenTrackRef.current = null;
+        const screenTrack = screenTrackRef.current;
 
-        // 카메라 트랙으로 전환
+        // 즉시 상태 변경 (UI 반응 빠르게)
+        setIsScreenSharing(false);
+
+        // 카메라 트랙이 있으면 즉시 publish (unpublish와 병렬)
         if (localVideoTrack) {
-          await client.publish(localVideoTrack);
+          // 동시에 실행 (더 빠름)
+          await Promise.all([
+            client.unpublish(screenTrack),
+            client.publish(localVideoTrack)
+          ]);
           logger.log('📹 Switched back to camera');
+        } else {
+          await client.unpublish(screenTrack);
         }
 
-        setIsScreenSharing(false);
+        // 화면 공유 트랙 정리
+        screenTrack.close();
+        screenTrackRef.current = null;
       }
       // 화면 공유 시작
       else {
@@ -599,34 +607,43 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, messages, on
 
         // 화면 공유 트랙 생성
         const screenTrack = await AgoraRTC.createScreenVideoTrack({
-          encoderConfig: '1080p_1', // Full HD
-          optimizationMode: 'detail', // 문서/텍스트 최적화
+          encoderConfig: '720p_2', // 720p (빠른 전환)
+          optimizationMode: 'motion', // 저지연 우선
         }, 'disable'); // 오디오는 마이크 사용하므로 비활성화
 
-        // 기존 카메라 트랙 unpublish
+        // 카메라 unpublish와 화면 공유 publish 동시 실행 (더 빠름)
         if (localVideoTrack) {
-          await client.unpublish(localVideoTrack);
-          logger.log('📹 Unpublished camera track');
+          await Promise.all([
+            client.unpublish(localVideoTrack),
+            client.publish(screenTrack)
+          ]);
+          logger.log('🖥️ Switched to screen share');
+        } else {
+          await client.publish(screenTrack);
         }
 
-        // 화면 공유 트랙 publish
-        await client.publish(screenTrack);
         screenTrackRef.current = screenTrack;
 
         // 화면 공유 중단 시 (사용자가 "공유 중지" 버튼 클릭)
         screenTrack.on('track-ended', async () => {
           logger.log('🛑 Screen share stopped by user');
-          await client.unpublish(screenTrack);
-          screenTrack.close();
-          screenTrackRef.current = null;
 
-          // 카메라로 복귀
+          // 즉시 상태 변경 (UI 반응 빠르게)
+          setIsScreenSharing(false);
+
+          // 카메라로 복귀 (동시 실행)
           if (localVideoTrack) {
-            await client.publish(localVideoTrack);
+            await Promise.all([
+              client.unpublish(screenTrack),
+              client.publish(localVideoTrack)
+            ]);
             logger.log('📹 Switched back to camera');
+          } else {
+            await client.unpublish(screenTrack);
           }
 
-          setIsScreenSharing(false);
+          screenTrack.close();
+          screenTrackRef.current = null;
         });
 
         setIsScreenSharing(true);
