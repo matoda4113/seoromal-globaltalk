@@ -1,12 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Room } from '@/hooks/useSocket';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
 import type { IAgoraRTCRemoteUser } from 'agora-rtc-sdk-ng';
 import type { ILocalVideoTrack } from 'agora-rtc-sdk-ng';
-import logger from '@/lib/logger';
 
 const translations = {
   ko: {
@@ -32,6 +31,9 @@ interface VideoCallViewProps {
   selectedCameraId: string;
   changeMicrophone: (deviceId: string) => void;
   changeCamera: (deviceId: string) => void;
+  isScreenSharing: boolean;
+  toggleScreenShare: () => void;
+  screenShareLabel: string;
 }
 
 export default function VideoCallView({
@@ -46,46 +48,29 @@ export default function VideoCallView({
   selectedCameraId,
   changeMicrophone,
   changeCamera,
+  isScreenSharing,
+  toggleScreenShare,
+  screenShareLabel,
 }: VideoCallViewProps) {
   const { user } = useAuth();
   const { currentLanguage } = useGlobalSettings();
   const t = translations[currentLanguage];
   const [isPipMode, setIsPipMode] = useState(true);
 
-  // 로컬 비디오 재생 (PIP 모드 전환 시에도 재생)
-  useEffect(() => {
-    if (localVideoTrack && localVideoRef.current) {
-      try {
-        localVideoTrack.play(localVideoRef.current, { fit: 'cover' });
-        logger.log('📹 Playing local video (isPipMode:', isPipMode, ')');
-      } catch (error) {
-        logger.error('Failed to play local video:', error);
+  // PIP 모드 전환 시 비디오 재연결 (prop으로 받은 함수 호출)
+  const handlePipToggle = (newMode: boolean) => {
+    setIsPipMode(newMode);
+
+    // DOM 재렌더링 후 비디오 재연결
+    setTimeout(() => {
+      if (localVideoTrack && localVideoRef.current) {
+        localVideoTrack.play(localVideoRef.current);
       }
-    }
-
-    return () => {
-      // cleanup: 트랙은 유지하되 DOM만 정리
-    };
-  }, [localVideoTrack, localVideoRef, isPipMode]);
-
-  // 리모트 비디오 재생 (PIP 모드 전환 시에도 재생)
-  useEffect(() => {
-    if (remoteUsers.length > 0 && remoteVideoRef.current) {
-      const remoteUser = remoteUsers[0];
-      if (remoteUser.videoTrack) {
-        try {
-          remoteUser.videoTrack.play(remoteVideoRef.current, { fit: 'cover' });
-          logger.log('📹 Playing remote video (isPipMode:', isPipMode, ')');
-        } catch (error) {
-          logger.error('Failed to play remote video:', error);
-        }
+      if (remoteUsers.length > 0 && remoteUsers[0].videoTrack && remoteVideoRef.current) {
+        remoteUsers[0].videoTrack.play(remoteVideoRef.current);
       }
-    }
-
-    return () => {
-      // cleanup: 트랙은 유지하되 DOM만 정리
-    };
-  }, [remoteUsers, remoteVideoRef, isPipMode]);
+    }, 50);
+  };
 
   return (
     <>
@@ -123,7 +108,9 @@ export default function VideoCallView({
             <div className="absolute bottom-4 left-4 md:left-auto md:right-4 w-32 h-48 md:w-48 md:h-64 bg-gray-800 rounded-lg overflow-hidden shadow-2xl z-10 border-2 border-white/30">
               <div
                 ref={localVideoRef}
-                className="w-full h-full [&>video]:w-full [&>video]:h-full [&>video]:object-cover"
+                className={`w-full h-full [&>video]:w-full [&>video]:h-full ${
+                  isScreenSharing ? '[&>video]:object-contain' : '[&>video]:object-cover'
+                }`}
               />
               {/* 로컬 비디오가 없을 때 플레이스홀더 */}
               {!localVideoTrack && (
@@ -145,16 +132,34 @@ export default function VideoCallView({
               )}
             </div>
 
-            {/* PIP 모드 토글 버튼 - 하단 오른쪽 */}
-            <button
-              onClick={() => setIsPipMode(false)}
-              className="absolute bottom-4 right-4 z-20 bg-gray-900/80 backdrop-blur-sm text-white p-3 rounded-full hover:bg-gray-800 transition-colors shadow-lg"
-              title="분할 화면으로 전환"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1v-3z" />
-              </svg>
-            </button>
+            {/* PIP 모드 컨트롤 버튼들 - 하단 오른쪽 */}
+            <div className="absolute bottom-4 right-4 z-20 flex items-center gap-3">
+              {/* 화면 공유 버튼 */}
+              <button
+                onClick={toggleScreenShare}
+                className={`${
+                  isScreenSharing
+                    ? 'bg-blue-600 hover:bg-blue-700'
+                    : 'bg-gray-900/80 hover:bg-gray-800'
+                } backdrop-blur-sm text-white p-3 rounded-full transition-colors shadow-lg`}
+                title={screenShareLabel}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </button>
+
+              {/* PIP 모드 토글 버튼 */}
+              <button
+                onClick={() => handlePipToggle(false)}
+                className="bg-gray-900/80 backdrop-blur-sm text-white p-3 rounded-full hover:bg-gray-800 transition-colors shadow-lg"
+                title="분할 화면으로 전환"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1v-3z" />
+                </svg>
+              </button>
+            </div>
 
             {/* 마이크 & 카메라 선택 - PIP 창 안쪽 하단 (PC only) */}
             {(microphones.length > 1 || cameras.length > 1) && (
@@ -237,7 +242,9 @@ export default function VideoCallView({
             <div className="flex-1 bg-gray-800 relative overflow-hidden">
               <div
                 ref={localVideoRef}
-                className="w-full h-full [&>video]:w-full [&>video]:h-full [&>video]:object-cover"
+                className={`w-full h-full [&>video]:w-full [&>video]:h-full ${
+                  isScreenSharing ? '[&>video]:object-contain' : '[&>video]:object-cover'
+                }`}
               />
               {/* 로컬 비디오가 없을 때 플레이스홀더 */}
               {!localVideoTrack && (
@@ -307,16 +314,34 @@ export default function VideoCallView({
               )}
             </div>
 
-            {/* PIP 모드 토글 버튼 - 하단 오른쪽 */}
-            <button
-              onClick={() => setIsPipMode(true)}
-              className="absolute bottom-4 right-4 z-20 bg-gray-900/80 backdrop-blur-sm text-white p-3 rounded-full hover:bg-gray-800 transition-colors shadow-lg"
-              title="PIP 모드로 전환"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-            </button>
+            {/* 컨트롤 버튼들 - 하단 오른쪽 */}
+            <div className="absolute bottom-4 right-4 z-20 flex items-center gap-3">
+              {/* 화면 공유 버튼 */}
+              <button
+                onClick={toggleScreenShare}
+                className={`${
+                  isScreenSharing
+                    ? 'bg-blue-600 hover:bg-blue-700'
+                    : 'bg-gray-900/80 hover:bg-gray-800'
+                } backdrop-blur-sm text-white p-3 rounded-full transition-colors shadow-lg`}
+                title={screenShareLabel}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </button>
+
+              {/* PIP 모드 토글 버튼 */}
+              <button
+                onClick={() => handlePipToggle(true)}
+                className="bg-gray-900/80 backdrop-blur-sm text-white p-3 rounded-full hover:bg-gray-800 transition-colors shadow-lg"
+                title="PIP 모드로 전환"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              </button>
+            </div>
           </div>
         )}
     </>

@@ -58,6 +58,8 @@ const translations = {
     chatTabAll: '전체',
     chatTabVoice: 'STT',
     chatTabText: '텍스트',
+    screenShare: '화면 공유',
+    stopScreenShare: '공유 중지',
   },
   en: {
     leave: 'Leave',
@@ -91,6 +93,8 @@ const translations = {
     chatTabAll: 'All',
     chatTabVoice: 'STT',
     chatTabText: 'Text',
+    screenShare: 'Share Screen',
+    stopScreenShare: 'Stop Sharing',
   },
   ja: {
     leave: '退出',
@@ -124,6 +128,8 @@ const translations = {
     chatTabAll: '全て',
     chatTabVoice: 'STT',
     chatTabText: 'テキスト',
+    screenShare: '画面共有',
+    stopScreenShare: '共有停止',
   },
 };
 
@@ -196,6 +202,10 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, messages, on
   // 비디오 재생을 위한 ref
   const localVideoRef = useRef<HTMLDivElement>(null);
   const remoteVideoRef = useRef<HTMLDivElement>(null);
+
+  // 화면 공유 상태
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const screenTrackRef = useRef<any>(null);
 
   useEffect(() => {
     onLeaveRef.current = onLeave;
@@ -278,6 +288,22 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, messages, on
       startLocalVideo();
     }
   }, [isOpen, room.callType, localVideoTrack, startLocalVideo]);
+
+  // 로컬 비디오 재생
+  useEffect(() => {
+    if (localVideoTrack && localVideoRef.current) {
+      localVideoTrack.play(localVideoRef.current);
+      logger.log('📹 Local video playing');
+    }
+  }, [localVideoTrack]);
+
+  // 리모트 비디오 재생
+  useEffect(() => {
+    if (remoteUsers.length > 0 && remoteUsers[0].videoTrack && remoteVideoRef.current) {
+      remoteUsers[0].videoTrack.play(remoteVideoRef.current);
+      logger.log('📹 Remote video playing');
+    }
+  }, [remoteUsers]);
 
   // 게스트 포인트 부족 시 자동 퇴장 타이머
   const autoKickTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -539,6 +565,93 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, messages, on
     };
   }, [isJoined, client]);
 
+  // 화면 공유 토글
+  const toggleScreenShare = useCallback(async () => {
+    if (!client || !isJoined) {
+      logger.warn('⚠️ Cannot share screen: not connected');
+      return;
+    }
+
+    try {
+      // 화면 공유 중이면 중지하고 카메라로 전환
+      if (isScreenSharing && screenTrackRef.current) {
+        logger.log('🛑 Stopping screen share, switching to camera');
+
+        // 화면 공유 트랙 unpublish
+        await client.unpublish(screenTrackRef.current);
+        screenTrackRef.current.close();
+        screenTrackRef.current = null;
+
+        // 카메라 트랙으로 전환
+        if (localVideoTrack) {
+          await client.publish(localVideoTrack);
+          logger.log('📹 Switched back to camera');
+        }
+
+        setIsScreenSharing(false);
+      }
+      // 화면 공유 시작
+      else {
+        logger.log('🖥️ Starting screen share');
+
+        // Agora SDK 동적 import
+        const AgoraRTC = (await import('agora-rtc-sdk-ng')).default;
+
+        // 화면 공유 트랙 생성
+        const screenTrack = await AgoraRTC.createScreenVideoTrack({
+          encoderConfig: '1080p_1', // Full HD
+          optimizationMode: 'detail', // 문서/텍스트 최적화
+        }, 'disable'); // 오디오는 마이크 사용하므로 비활성화
+
+        // 기존 카메라 트랙 unpublish
+        if (localVideoTrack) {
+          await client.unpublish(localVideoTrack);
+          logger.log('📹 Unpublished camera track');
+        }
+
+        // 화면 공유 트랙 publish
+        await client.publish(screenTrack);
+        screenTrackRef.current = screenTrack;
+
+        // 화면 공유 중단 시 (사용자가 "공유 중지" 버튼 클릭)
+        screenTrack.on('track-ended', async () => {
+          logger.log('🛑 Screen share stopped by user');
+          await client.unpublish(screenTrack);
+          screenTrack.close();
+          screenTrackRef.current = null;
+
+          // 카메라로 복귀
+          if (localVideoTrack) {
+            await client.publish(localVideoTrack);
+            logger.log('📹 Switched back to camera');
+          }
+
+          setIsScreenSharing(false);
+        });
+
+        setIsScreenSharing(true);
+        logger.log('✅ Screen sharing started');
+      }
+    } catch (error: any) {
+      logger.error('❌ Screen share error:', error);
+
+      if (error.name === 'NotAllowedError' || error.code === 'PERMISSION_DENIED') {
+        alert('화면 공유 권한이 거부되었습니다.');
+      } else if (error.name === 'NotReadableError') {
+        alert('화면 공유를 시작할 수 없습니다. 다른 애플리케이션이 사용 중일 수 있습니다.');
+      } else {
+        alert('화면 공유 중 오류가 발생했습니다.');
+      }
+
+      // 에러 발생 시 상태 초기화
+      if (screenTrackRef.current) {
+        screenTrackRef.current.close();
+        screenTrackRef.current = null;
+      }
+      setIsScreenSharing(false);
+    }
+  }, [client, isJoined, isScreenSharing, localVideoTrack]);
+
   const handleClose = () => {
     logger.log('🚪 handleClose called, current state:', window.history.state);
 
@@ -781,6 +894,9 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, messages, on
             selectedCameraId={selectedCameraId}
             changeMicrophone={changeMicrophone}
             changeCamera={changeCamera}
+            isScreenSharing={isScreenSharing}
+            toggleScreenShare={toggleScreenShare}
+            screenShareLabel={isScreenSharing ? t.stopScreenShare : t.screenShare}
           />
         )}
 
