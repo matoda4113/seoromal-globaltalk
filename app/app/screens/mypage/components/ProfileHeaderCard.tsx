@@ -12,6 +12,8 @@ const translations = {
   ko: {
     degree: '매너 온도',
     points: '도토리',
+    rating: '내 평점',
+    reviews: '개의 평가',
     viewHistory: '내역 보기',
     updateSuccess: '수정되었습니다',
     updateFailed: '수정에 실패했습니다',
@@ -19,6 +21,8 @@ const translations = {
   en: {
     degree: 'Manner Temperature',
     points: 'Dotori',
+    rating: 'My Rating',
+    reviews: 'reviews',
     viewHistory: 'View History',
     updateSuccess: 'Updated successfully',
     updateFailed: 'Update failed',
@@ -26,6 +30,8 @@ const translations = {
   ja: {
     degree: 'マナー温度',
     points: 'ドトリ',
+    rating: '私の評価',
+    reviews: '個の評価',
     viewHistory: '履歴を見る',
     updateSuccess: '更新されました',
     updateFailed: '更新に失敗しました',
@@ -37,6 +43,7 @@ export default function ProfileHeaderCard() {
   const { user, refreshUser } = useAuth();
   const { currentLanguage } = useGlobalSettings();
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [showRatingTooltip, setShowRatingTooltip] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const t = translations[currentLanguage];
 
@@ -147,6 +154,67 @@ export default function ProfileHeaderCard() {
             style={{ width: `${Math.min((((user?.degree ? Number(user.degree) : 36.5) - 30) / 10) * 100, 100)}%` }}
           />
         </div>
+      </div>
+
+      {/* 평점 */}
+      <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-4 mt-3 relative">
+        <div
+          className="flex items-center justify-between cursor-pointer"
+          onClick={() => router.push('/app/ratings-detail')}
+          onMouseEnter={() => setShowRatingTooltip(true)}
+          onMouseLeave={() => setShowRatingTooltip(false)}
+        >
+          <span className="text-sm font-medium">{t.rating}</span>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <svg
+                  key={star}
+                  className={`w-5 h-5 ${
+                    star <= Math.round(user?.averageRating || 0) ? 'text-yellow-300' : 'text-white/30'
+                  }`}
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                </svg>
+              ))}
+            </div>
+            <span className="text-2xl font-bold">{user?.averageRating?.toFixed(1) || '0.0'}</span>
+          </div>
+        </div>
+        <div className="text-xs text-white/70 mt-1 text-right">
+          {user?.totalRatings || 0}{t.reviews}
+        </div>
+
+        {/* 툴팁 (호버 시 표시) */}
+        {showRatingTooltip && user?.ratingDistribution && (
+          <div className="absolute left-0 right-0 bottom-full mb-2 bg-gray-900 rounded-xl p-4 shadow-2xl z-10">
+            <div className="space-y-2">
+              {[5, 4, 3, 2, 1].map((rating) => {
+                const count = user.ratingDistribution?.[`rating${rating}` as keyof typeof user.ratingDistribution] || 0;
+                const percentage = user.totalRatings ? (count / user.totalRatings) * 100 : 0;
+                return (
+                  <div key={rating} className="flex items-center gap-3 text-sm">
+                    <div className="flex items-center gap-1 w-16">
+                      <svg className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      </svg>
+                      <span className="text-white">{rating}</span>
+                    </div>
+                    <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-yellow-400 rounded-full transition-all"
+                        style={{ width: `${percentage}%` }}
+                      />
+                    </div>
+                    <span className="text-white/70 w-8 text-right">{count}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 포인트 */}

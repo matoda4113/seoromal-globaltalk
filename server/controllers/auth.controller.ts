@@ -33,9 +33,56 @@ function generateRefreshToken(userId: number): string {
 }
 
 /**
+ * 유저 평점 정보 가져오기
+ */
+async function getUserRating(userId: number) {
+  try {
+    const query = `
+      SELECT
+        COALESCE(AVG(rating_score), 0) as average_rating,
+        COUNT(*) as total_ratings,
+        COUNT(CASE WHEN rating_score = 1 THEN 1 END) as rating_1_count,
+        COUNT(CASE WHEN rating_score = 2 THEN 1 END) as rating_2_count,
+        COUNT(CASE WHEN rating_score = 3 THEN 1 END) as rating_3_count,
+        COUNT(CASE WHEN rating_score = 4 THEN 1 END) as rating_4_count,
+        COUNT(CASE WHEN rating_score = 5 THEN 1 END) as rating_5_count
+      FROM ratings
+      WHERE rated_user_id = $1
+    `;
+    const result = await pool.query(query, [userId]);
+    const { average_rating, total_ratings, rating_1_count, rating_2_count, rating_3_count, rating_4_count, rating_5_count } = result.rows[0];
+
+    return {
+      averageRating: parseFloat(Number(average_rating).toFixed(1)),
+      totalRatings: parseInt(total_ratings),
+      ratingDistribution: {
+        rating1: parseInt(rating_1_count),
+        rating2: parseInt(rating_2_count),
+        rating3: parseInt(rating_3_count),
+        rating4: parseInt(rating_4_count),
+        rating5: parseInt(rating_5_count),
+      }
+    };
+  } catch (error) {
+    logger.error('Failed to get user rating:', error);
+    return {
+      averageRating: 0,
+      totalRatings: 0,
+      ratingDistribution: {
+        rating1: 0,
+        rating2: 0,
+        rating3: 0,
+        rating4: 0,
+        rating5: 0,
+      }
+    };
+  }
+}
+
+/**
  * 유저 정보를 일관된 형식으로 포맷팅
  */
-function formatUserInfo(user: any, points?: number) {
+function formatUserInfo(user: any, points?: number, rating?: { averageRating: number; totalRatings: number; ratingDistribution: { rating1: number; rating2: number; rating3: number; rating4: number; rating5: number } }) {
   return {
     userId: user.id,
     email: user.email,
@@ -49,6 +96,11 @@ function formatUserInfo(user: any, points?: number) {
     country: user.country,
     degree: user.degree,
     ...(points !== undefined && { points }),
+    ...(rating && {
+      averageRating: rating.averageRating,
+      totalRatings: rating.totalRatings,
+      ratingDistribution: rating.ratingDistribution
+    }),
   };
 }
 
@@ -141,6 +193,9 @@ export async function socialLogin(req: Request, res: Response) {
     // 사용자 포인트 조회
     const userPoints = await getUserPoints(pool, user.id);
 
+    // 사용자 평점 조회
+    const userRating = await getUserRating(user.id);
+
     // JWT 토큰 생성 (Access + Refresh)
     const accessToken = generateAccessToken(user.id);
     const refreshToken = generateRefreshToken(user.id);
@@ -169,7 +224,7 @@ export async function socialLogin(req: Request, res: Response) {
     return res.status(isNewUser ? 201 : 200).json({
       message: isNewUser ? 'Registration successful' : 'Login successful',
       data: {
-        userInfo: formatUserInfo(user, userPoints),
+        userInfo: formatUserInfo(user, userPoints, userRating),
       },
     });
   } catch (error) {
@@ -230,6 +285,9 @@ export async function emailRegister(req: Request, res: Response) {
     // 사용자 포인트 조회
     const userPoints = await getUserPoints(pool, user.id);
 
+    // 사용자 평점 조회
+    const userRating = await getUserRating(user.id);
+
     // JWT 토큰 생성 (Access + Refresh)
     const accessToken = generateAccessToken(user.id);
     const refreshToken = generateRefreshToken(user.id);
@@ -244,7 +302,7 @@ export async function emailRegister(req: Request, res: Response) {
 
     res.cookie('accessToken', accessToken, {
       ...cookieOptions,
-      maxAge: 15 * 60 * 1000, // 15분
+      maxAge: 24 * 60 * 60 * 1000, // 1일
     });
 
     res.cookie('refreshToken', refreshToken, {
@@ -257,7 +315,7 @@ export async function emailRegister(req: Request, res: Response) {
     return res.status(201).json({
       message: 'Registration successful',
       data: {
-        userInfo: formatUserInfo(user, userPoints),
+        userInfo: formatUserInfo(user, userPoints, userRating),
       },
     });
   } catch (error) {
@@ -308,6 +366,9 @@ export async function emailLogin(req: Request, res: Response) {
     // 사용자 포인트 조회
     const userPoints = await getUserPoints(pool, user.id);
 
+    // 사용자 평점 조회
+    const userRating = await getUserRating(user.id);
+
     // JWT 토큰 생성 (Access + Refresh)
     const accessToken = generateAccessToken(user.id);
     const refreshToken = generateRefreshToken(user.id);
@@ -322,7 +383,7 @@ export async function emailLogin(req: Request, res: Response) {
 
     res.cookie('accessToken', accessToken, {
       ...cookieOptions,
-      maxAge: 15 * 60 * 1000, // 15분
+      maxAge: 24 * 60 * 60 * 1000, // 15분
     });
 
     res.cookie('refreshToken', refreshToken, {
@@ -335,7 +396,7 @@ export async function emailLogin(req: Request, res: Response) {
     return res.json({
       message: 'Login successful',
       data: {
-        userInfo: formatUserInfo(user, userPoints),
+        userInfo: formatUserInfo(user, userPoints, userRating),
       },
     });
   } catch (error) {
@@ -377,7 +438,7 @@ export async function refreshAccessToken(req: Request, res: Response) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 15 * 60 * 1000, // 15분
+      maxAge: 24 * 60 * 60 * 1000, // 1일
     });
 
     return res.json({
@@ -418,10 +479,13 @@ export async function getCurrentUser(req: Request, res: Response) {
     // 사용자 포인트 조회
     const userPoints = await getUserPoints(pool, user.id);
 
+    // 사용자 평점 조회
+    const userRating = await getUserRating(user.id);
+
     return res.json({
       message: 'User retrieved successfully',
       data: {
-        userInfo: formatUserInfo(user, userPoints),
+        userInfo: formatUserInfo(user, userPoints, userRating),
       },
     });
   } catch (error) {

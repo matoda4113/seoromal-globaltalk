@@ -20,6 +20,23 @@ export interface SubmitRatingResponse {
   message: string;
 }
 
+export interface RatingDetail {
+  rating_id: number;
+  rating_score: number;
+  rating_comment: string | null;
+  created_at: string;
+  rater_user_id: number;
+  rater_nickname: string;
+  rater_profile_image: string | null;
+}
+
+export interface GetUserRatingsResponse {
+  data: {
+    ratings: RatingDetail[];
+    total: number;
+  };
+}
+
 class RatingsService {
   /**
    * 평가 제출
@@ -33,6 +50,22 @@ class RatingsService {
       return response.data;
     } catch (error) {
       logger.error('Failed to submit rating:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 특정 사용자가 받은 평가 상세 조회
+   * GET /api/ratings/:userId
+   */
+  async getUserRatings(userId: number): Promise<GetUserRatingsResponse> {
+    try {
+      logger.info('Fetching user ratings...', userId);
+      const response = await apiClient.get<GetUserRatingsResponse>(`/ratings/${userId}`);
+      logger.info('User ratings fetched successfully');
+      return response.data;
+    } catch (error) {
+      logger.error('Failed to fetch user ratings:', error);
       throw error;
     }
   }

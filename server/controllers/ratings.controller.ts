@@ -102,3 +102,47 @@ export async function submitRating(req: Request, res: Response) {
     return res.status(500).json({ error: '평가 제출 중 오류가 발생했습니다.' });
   }
 }
+
+/**
+ * 특정 사용자가 받은 평가 상세 조회 (최근 100개)
+ * GET /ratings/:userId
+ */
+export async function getUserRatings(req: Request, res: Response) {
+  try {
+    const userIdParam = req.params.userId;
+    const userId = parseInt(Array.isArray(userIdParam) ? userIdParam[0] : userIdParam);
+
+    if (isNaN(userId)) {
+      return res.status(400).json({ error: '유효하지 않은 사용자 ID입니다.' });
+    }
+
+    // 평가 상세 조회 (최근 100개, 평가자 정보 포함)
+    const query = `
+      SELECT
+        r.rating_id,
+        r.rating_score,
+        r.rating_comment,
+        r.created_at,
+        u.id as rater_user_id,
+        u.nickname as rater_nickname,
+        u.profile_image_url as rater_profile_image
+      FROM ratings r
+      LEFT JOIN users u ON r.rater_user_id = u.id
+      WHERE r.rated_user_id = $1
+      ORDER BY r.created_at DESC
+      LIMIT 100
+    `;
+
+    const result = await pool.query(query, [userId]);
+
+    return res.status(200).json({
+      data: {
+        ratings: result.rows,
+        total: result.rows.length
+      }
+    });
+  } catch (error) {
+    logger.error('❌ 평가 조회 에러:', error);
+    return res.status(500).json({ error: '평가 조회 중 오류가 발생했습니다.' });
+  }
+}

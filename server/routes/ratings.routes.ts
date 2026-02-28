@@ -11,4 +11,11 @@ const router = Router();
  */
 router.post('/', authenticate, ratingsController.submitRating);
 
+/**
+ * 특정 사용자가 받은 평가 상세 조회
+ * GET /ratings/:userId
+ * Header: Cookie (accessToken)
+ */
+router.get('/:userId', ratingsController.getUserRatings);
+
 export default router;

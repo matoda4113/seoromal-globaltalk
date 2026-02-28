@@ -21,6 +21,10 @@ export interface Room {
   hostId: number; // 항상 로그인한 사용자만 호스트 가능
   hostNickname: string;
   hostProfileImage?: string | null; // 호스트 프로필 이미지
+  hostBio?: string | null; // 호스트 자기소개
+  hostDegree?: number; // 호스트 매너 온도
+  hostAverageRating?: number; // 호스트 평균 평점
+  hostTotalRatings?: number; // 호스트 총 평가 수
   language: 'ko' | 'en' | 'ja';
   topic: 'free' | 'romance' | 'hobby' | 'business' | 'travel';
   callType: 'audio' | 'video'; // 오디오콜 or 비디오콜
@@ -280,6 +284,12 @@ export function useSocket() {
     socket.emit('sendMessage', { roomId, message, type });
   };
 
+  const updateRoomTitle = (roomId: string, newTitle: string) => {
+    const socket = getSocket();
+    logger.info('Updating room title:', roomId, newTitle);
+    socket.emit('updateRoomTitle', { roomId, newTitle });
+  };
+
   return {
     rooms,
     onlineCount,
@@ -295,5 +305,6 @@ export function useSocket() {
     createRoom,
     authenticate,
     sendMessage,
+    updateRoomTitle,
   };
 }

@@ -92,6 +92,7 @@ export default function HomeScreen() {
     joinRoom,
     messages,
     sendMessage,
+    updateRoomTitle,
     ratingModalData,
     setRatingModalData,
     guestBalance,
@@ -414,6 +415,7 @@ export default function HomeScreen() {
           room={currentRoomForModal}
           messages={messages}
           onSendMessage={sendMessage}
+          onUpdateRoomTitle={updateRoomTitle}
           guestBalance={guestBalance}
           giftNotification={giftNotification}
         />

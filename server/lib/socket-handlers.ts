@@ -23,6 +23,10 @@ interface Room {
   hostId: number; // 항상 로그인한 사용자만 호스트 가능
   hostNickname: string;
   hostProfileImage?: string | null; // 호스트 프로필 이미지
+  hostBio?: string | null; // 호스트 자기소개
+  hostDegree?: number; // 호스트 매너 온도
+  hostAverageRating?: number; // 호스트 평균 평점
+  hostTotalRatings?: number; // 호스트 총 평가 수
   language: 'ko' | 'en' | 'ja';
   topic: 'free' | 'romance' | 'hobby' | 'business' | 'travel';
   callType: 'audio' | 'video'; // 오디오콜 or 비디오콜
@@ -494,7 +498,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
     });
 
     // 방 만들기 (로그인 필수)
-    socket.on('createRoom', (data: {
+    socket.on('createRoom', async (data: {
       title: string;
       language: string;
       topic: string;
@@ -527,12 +531,48 @@ export function initializeSocketHandlers(io: SocketIOServer) {
         return;
       }
 
+      // 호스트 정보 DB에서 조회 (bio, degree, rating)
+      let hostBio: string | null | undefined;
+      let hostDegree: number | undefined;
+      let hostAverageRating: number | undefined;
+      let hostTotalRatings: number | undefined;
+
+      try {
+        const userQuery = await pool.query(
+          `SELECT bio, degree FROM users WHERE id = $1`,
+          [user.userId]
+        );
+        if (userQuery.rows.length > 0) {
+          hostBio = userQuery.rows[0].bio;
+          hostDegree = userQuery.rows[0].degree;
+        }
+
+        const ratingQuery = await pool.query(
+          `SELECT
+            COALESCE(AVG(rating_score), 0) as average_rating,
+            COUNT(*) as total_ratings
+          FROM ratings
+          WHERE rated_user_id = $1`,
+          [user.userId]
+        );
+        if (ratingQuery.rows.length > 0) {
+          hostAverageRating = parseFloat(Number(ratingQuery.rows[0].average_rating).toFixed(1));
+          hostTotalRatings = parseInt(ratingQuery.rows[0].total_ratings);
+        }
+      } catch (error) {
+        logger.error('❌ Failed to fetch host info:', error);
+      }
+
       const room: Room = {
         id: `room_${Date.now()}_${Math.random().toString(36).substring(7)}`,
         title: data.title,
         hostId: user.userId,
         hostNickname: user.nickname??"host",
         hostProfileImage: user.profileImageUrl,
+        hostBio,
+        hostDegree,
+        hostAverageRating,
+        hostTotalRatings,
         language: data.language as 'ko' | 'en' | 'ja',
         topic: data.topic as 'free' | 'romance' | 'hobby' | 'business' | 'travel',
         callType: data.roomType as 'audio' | 'video',
@@ -746,6 +786,46 @@ export function initializeSocketHandlers(io: SocketIOServer) {
       room.participants.forEach((p) => {
         io.to(p.socketId).emit('newMessage', messageData);
       });
+    });
+
+    // 방 제목 수정 (방장만 가능)
+    socket.on('updateRoomTitle', (data: { roomId: string; newTitle: string }) => {
+      const room = rooms.get(data.roomId);
+
+      if (!room) {
+        socket.emit('error', { message: '방을 찾을 수 없습니다.' });
+        return;
+      }
+
+      // 요청자가 방장인지 확인
+      const participant = room.participants.find((p) => p.socketId === socket.id);
+      if (!participant || !participant.isHost) {
+        socket.emit('error', { message: '방장만 제목을 수정할 수 있습니다.' });
+        return;
+      }
+
+      // 제목 유효성 검사
+      if (!data.newTitle || data.newTitle.trim().length === 0) {
+        socket.emit('error', { message: '방 제목을 입력해주세요.' });
+        return;
+      }
+
+      if (data.newTitle.trim().length > 50) {
+        socket.emit('error', { message: '방 제목은 50자 이내로 입력해주세요.' });
+        return;
+      }
+
+      // 방 제목 업데이트
+      room.title = data.newTitle.trim();
+      logger.log(`✏️ Room title updated: ${room.id} -> "${room.title}"`);
+
+      // 방의 모든 참가자에게 업데이트된 방 정보 전송
+      room.participants.forEach((p) => {
+        io.to(p.socketId).emit('roomUpdated', serializeRoom(room));
+      });
+
+      // 전체 사용자에게 방 목록 업데이트 알림
+      io.emit('roomListUpdated', serializeRoom(room));
     });
 
     // 연결 해제

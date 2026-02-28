@@ -21,6 +21,7 @@ interface RoomModalProps {
   room: Room;
   messages: ChatMessage[];
   onSendMessage: (roomId: string, message: string, type?: 'text' | 'stt') => void;
+  onUpdateRoomTitle?: (roomId: string, newTitle: string) => void;
   guestBalance?: number;
   giftNotification?: { senderNickname: string; amount: number } | null;
 }
@@ -60,6 +61,9 @@ const translations = {
     chatTabText: '텍스트',
     screenShare: '화면 공유',
     stopScreenShare: '공유 중지',
+    editTitle: '제목 수정',
+    saveTitle: '저장',
+    cancelEdit: '취소',
   },
   en: {
     leave: 'Leave',
@@ -95,6 +99,9 @@ const translations = {
     chatTabText: 'Text',
     screenShare: 'Share Screen',
     stopScreenShare: 'Stop Sharing',
+    editTitle: 'Edit Title',
+    saveTitle: 'Save',
+    cancelEdit: 'Cancel',
   },
   ja: {
     leave: '退出',
@@ -130,12 +137,17 @@ const translations = {
     chatTabText: 'テキスト',
     screenShare: '画面共有',
     stopScreenShare: '共有停止',
+    editTitle: 'タイトル編集',
+    saveTitle: '保存',
+    cancelEdit: 'キャンセル',
   },
 };
 
-export default function RoomModal({ isOpen, onClose, onLeave, room, messages, onSendMessage, guestBalance, giftNotification }: RoomModalProps) {
+export default function RoomModal({ isOpen, onClose, onLeave, room, messages, onSendMessage, onUpdateRoomTitle, guestBalance, giftNotification }: RoomModalProps) {
   const { currentLanguage } = useGlobalSettings();
   const t = translations[currentLanguage];
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState(room.title);
   const { user } = useAuth();
   const [callDuration, setCallDuration] = useState(0);
   const [messageInput, setMessageInput] = useState('');
@@ -669,6 +681,36 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, messages, on
     }
   }, [client, isJoined, isScreenSharing, localVideoTrack]);
 
+  // room.title이 변경되면 editedTitle도 업데이트
+  useEffect(() => {
+    setEditedTitle(room.title);
+  }, [room.title]);
+
+  // 방장이 방 제목 저장
+  const handleSaveTitle = () => {
+    if (!onUpdateRoomTitle) return;
+
+    const trimmedTitle = editedTitle.trim();
+    if (!trimmedTitle) {
+      alert('방 제목을 입력해주세요.');
+      return;
+    }
+
+    if (trimmedTitle.length > 50) {
+      alert('방 제목은 50자 이내로 입력해주세요.');
+      return;
+    }
+
+    onUpdateRoomTitle(room.id, trimmedTitle);
+    setIsEditingTitle(false);
+  };
+
+  // 방 제목 수정 취소
+  const handleCancelEditTitle = () => {
+    setEditedTitle(room.title);
+    setIsEditingTitle(false);
+  };
+
   const handleClose = () => {
     logger.log('🚪 handleClose called, current state:', window.history.state);
 
@@ -838,8 +880,48 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, messages, on
           </svg>
           <span>{t.leave}</span>
         </button>
-        <div className="flex flex-col items-center">
-          <h1 className="text-white font-semibold text-lg">{room.title}</h1>
+        <div className="flex flex-col items-center flex-1 mx-4">
+          {/* Room Title */}
+          {isEditingTitle && !isGuest ? (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={editedTitle}
+                onChange={(e) => setEditedTitle(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleSaveTitle()}
+                className="bg-gray-700 text-white px-3 py-1 rounded text-sm max-w-[200px]"
+                maxLength={50}
+                autoFocus
+              />
+              <button
+                onClick={handleSaveTitle}
+                className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700"
+              >
+                {t.saveTitle}
+              </button>
+              <button
+                onClick={handleCancelEditTitle}
+                className="bg-gray-600 text-white px-3 py-1 rounded text-xs hover:bg-gray-700"
+              >
+                {t.cancelEdit}
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <h1 className="text-white font-semibold text-lg">{room.title}</h1>
+              {!isGuest && (
+                <button
+                  onClick={() => setIsEditingTitle(true)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                  title={t.editTitle}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          )}
           {/* Connection Status */}
           {(() => {
             const currentParticipant = room.participants.find(p => p.userId === user?.userId);

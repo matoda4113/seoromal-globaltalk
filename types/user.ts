@@ -15,6 +15,15 @@ export interface User {
   points?: number;
   country?: string | null;
   socketId?: string; // 소켓 연결 시에만 존재
+  averageRating?: number; // 평균 평점
+  totalRatings?: number; // 총 평가 수
+  ratingDistribution?: {
+    rating1: number;
+    rating2: number;
+    rating3: number;
+    rating4: number;
+    rating5: number;
+  };
 }
 
 /**
