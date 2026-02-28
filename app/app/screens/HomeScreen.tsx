@@ -428,6 +428,22 @@ export default function HomeScreen() {
           message={ratingModalData.message}
         />
       )}
+
+      {/* 일반 알림 모달 (평가 없이 메시지만 표시) */}
+      {ratingModalData?.show && !ratingModalData.hostUserId && ratingModalData.message && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-white text-lg font-semibold mb-4">알림</h3>
+            <p className="text-gray-300 mb-6">{ratingModalData.message}</p>
+            <button
+              onClick={() => setRatingModalData(null)}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors"
+            >
+              확인
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }

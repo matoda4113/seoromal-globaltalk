@@ -147,12 +147,13 @@ export function useSocket() {
       setMessages([]); // 방 닫힐 때 메시지 초기화
       setGuestBalance(undefined); // 잔액 초기화
 
-      // 평가 모달 표시 로직
+      // 평가 모달 또는 일반 메시지 모달 표시
       if (data.showRatingModal && data.hostUserId) {
         logger.info('⭐ Showing rating modal for host:', data.hostUserId);
         setRatingModalData({ show: true, hostUserId: data.hostUserId, message: data.message });
       } else {
-        alert(data.message);
+        // alert 대신 ratingModalData로 메시지만 표시
+        setRatingModalData({ show: true, message: data.message });
       }
     };
 
