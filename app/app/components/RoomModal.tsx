@@ -55,6 +55,9 @@ const translations = {
     reallyLeave: '정말 나가시겠습니까?',
     confirm: '확인',
     warning: '경고',
+    chatTabAll: '전체',
+    chatTabVoice: 'STT',
+    chatTabText: '텍스트',
   },
   en: {
     leave: 'Leave',
@@ -85,6 +88,9 @@ const translations = {
     reallyLeave: 'Are you sure you want to leave?',
     confirm: 'Confirm',
     warning: 'Warning',
+    chatTabAll: 'All',
+    chatTabVoice: 'STT',
+    chatTabText: 'Text',
   },
   ja: {
     leave: '退出',
@@ -115,6 +121,9 @@ const translations = {
     reallyLeave: '本当に退出しますか？',
     confirm: '確認',
     warning: '警告',
+    chatTabAll: '全て',
+    chatTabVoice: 'STT',
+    chatTabText: 'テキスト',
   },
 };
 
@@ -328,6 +337,9 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, messages, on
 
   // 채팅 토글
   const [isChatVisible, setIsChatVisible] = useState(true);
+
+  // 채팅 탭 (all: 전체, voice: STT만, text: 일반 텍스트만)
+  const [chatTab, setChatTab] = useState<'all' | 'voice' | 'text'>('all');
 
   // 채팅 기록 지우기 (로컬만)
   const [localMessages, setLocalMessages] = useState<typeof messages>([]);
@@ -772,23 +784,39 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, messages, on
           />
         )}
 
-        {/* 선물하기 버튼 (항상 표시, 왼쪽 상단) */}
-        {room.sessionStartedAt && (
-          <div className="absolute top-4 left-4 z-20 pointer-events-auto">
-            <button
-              onClick={() => setIsGiftModalOpen(true)}
-              className="bg-pink-600/80 hover:bg-pink-500/80 text-white text-xs px-3 py-1 rounded-full backdrop-blur-sm transition-colors flex items-center gap-1 shadow-lg"
-            >
-              🎁 {t.sendGift}
-            </button>
-          </div>
-        )}
-
         {/* Chat Messages Overlay (full height) */}
         {isChatVisible && (
           <div className="absolute top-4 bottom-4 left-4 right-4 overflow-y-auto space-y-2 pointer-events-none z-10">
-            {/* 상단 버튼들 */}
-            <div className="flex justify-end items-start mb-2 pointer-events-auto">
+            {/* 상단: 탭 + 채팅 지우기 버튼 */}
+            <div className="flex justify-between items-start mb-2 pointer-events-auto">
+              {/* 채팅 탭 (왼쪽) */}
+              <div className="flex gap-1 bg-gray-800/70 backdrop-blur-sm rounded-full p-1">
+                <button
+                  onClick={() => setChatTab('all')}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                    chatTab === 'all' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:text-white'
+                  }`}
+                >
+                  {t.chatTabAll}
+                </button>
+                <button
+                  onClick={() => setChatTab('voice')}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                    chatTab === 'voice' ? 'bg-purple-600 text-white' : 'text-gray-300 hover:text-white'
+                  }`}
+                >
+                  🎤 {t.chatTabVoice}
+                </button>
+                <button
+                  onClick={() => setChatTab('text')}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                    chatTab === 'text' ? 'bg-green-600 text-white' : 'text-gray-300 hover:text-white'
+                  }`}
+                >
+                  💬 {t.chatTabText}
+                </button>
+              </div>
+
               {/* 채팅 지우기 버튼 (오른쪽) */}
               {localMessages.length > 0 && (
                 <button
@@ -800,7 +828,14 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, messages, on
               )}
             </div>
 
-            {localMessages.map((msg) => {
+            {localMessages
+              .filter((msg) => {
+                if (chatTab === 'all') return true;
+                if (chatTab === 'voice') return msg.type === 'stt';
+                if (chatTab === 'text') return msg.type !== 'stt';
+                return true;
+              })
+              .map((msg) => {
               const isMyMessage = msg.senderId === user?.userId;
               const isSTT = msg.type === 'stt';
 
@@ -974,16 +1009,30 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, messages, on
         </div>
       )}
 
-      {/* Points Rule Help Button - Fixed Bottom Right */}
-      <button
-        onClick={() => setIsPointsRuleModalOpen(true)}
-        className="absolute bottom-6 right-6 w-12 h-12 md:w-14 md:h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110 z-40"
-        aria-label="Points Rules"
-      >
-        <svg className="w-6 h-6 md:w-7 md:h-7" fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-        </svg>
-      </button>
+      {/* Fixed Bottom Right Buttons */}
+      <div className="absolute bottom-6 right-6 flex items-center gap-3 z-40">
+        {/* 선물하기 버튼 */}
+        {room.sessionStartedAt && (
+          <button
+            onClick={() => setIsGiftModalOpen(true)}
+            className="w-12 h-12 md:w-14 md:h-14 bg-pink-600 hover:bg-pink-700 text-white rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110"
+            aria-label="Send Gift"
+          >
+            <span className="text-2xl md:text-3xl">🎁</span>
+          </button>
+        )}
+
+        {/* Points Rule Help Button */}
+        <button
+          onClick={() => setIsPointsRuleModalOpen(true)}
+          className="w-12 h-12 md:w-14 md:h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110"
+          aria-label="Points Rules"
+        >
+          <svg className="w-6 h-6 md:w-7 md:h-7" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+          </svg>
+        </button>
+      </div>
 
       {/* Points Rule Modal */}
       <PointsRuleModal
