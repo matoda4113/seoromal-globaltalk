@@ -23,6 +23,7 @@ import pointsRoutes from './server/routes/points.routes';
 import uploadRoutes from './server/routes/upload.routes';
 import ratingsRoutes from './server/routes/ratings.routes';
 import giftRoutes from './server/routes/gift.routes';
+import callHistoryRoutes from './server/routes/call-history.routes';
 
 const dev = process.env.NODE_ENV !== 'production';
 const PORT = process.env.PORT || 4000;
@@ -69,11 +70,12 @@ app.prepare().then(() => {
   });
 
   // API routes
-  expressApp.use('/auth', authRoutes);
-  expressApp.use('/points', pointsRoutes);
-  expressApp.use('/upload', uploadRoutes);
-  expressApp.use('/ratings', ratingsRoutes);
-  expressApp.use('/gift', giftRoutes);
+  expressApp.use('/api/auth', authRoutes);
+  expressApp.use('/api/points', pointsRoutes);
+  expressApp.use('/api/upload', uploadRoutes);
+  expressApp.use('/api/ratings', ratingsRoutes);
+  expressApp.use('/api/gift', giftRoutes);
+  expressApp.use('/api/call-history', callHistoryRoutes);
 
   // Initialize Socket.IO handlers
   initializeSocketHandlers(io);

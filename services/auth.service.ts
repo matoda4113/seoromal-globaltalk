@@ -1,84 +1,6 @@
-import axios from 'axios';
+import apiClient from '@/lib/apiClient';
 import logger from '@/lib/logger';
 import { User } from '@/types/user';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-
-// axios 인스턴스 생성 (withCredentials: true로 Cookie 자동 전송)
-const apiClient = axios.create({
-  baseURL: API_BASE_URL,
-  withCredentials: true, // httpOnly Cookie 자동 전송
-});
-
-// Refresh token으로 재시도 중인지 추적
-let isRefreshing = false;
-let failedQueue: Array<{
-  resolve: (value?: any) => void;
-  reject: (reason?: any) => void;
-}> = [];
-
-const processQueue = (error: any = null) => {
-  failedQueue.forEach((prom) => {
-    if (error) {
-      prom.reject(error);
-    } else {
-      prom.resolve();
-    }
-  });
-  failedQueue = [];
-};
-
-// Response Interceptor: 403 에러(토큰 만료) 시 자동으로 토큰 갱신
-apiClient.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const originalRequest = error.config;
-
-    // 403 에러(토큰 만료)이고, 재시도하지 않은 요청이며, refresh 엔드포인트가 아닌 경우
-    if (
-      error.response?.status === 403 &&
-      !originalRequest._retry &&
-      !originalRequest.url?.includes('/auth/refresh')
-    ) {
-      if (isRefreshing) {
-        // 이미 refresh 중이면 대기열에 추가
-        return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
-        })
-          .then(() => {
-            return apiClient(originalRequest);
-          })
-          .catch((err) => {
-            return Promise.reject(err);
-          });
-      }
-
-      originalRequest._retry = true;
-      isRefreshing = true;
-
-      try {
-        // Refresh Token으로 새 Access Token 발급
-        await apiClient.post('/auth/refresh');
-        logger.info('Access token refreshed successfully');
-
-        processQueue(null);
-        isRefreshing = false;
-
-        // 원래 요청 재시도
-        return apiClient(originalRequest);
-      } catch (refreshError) {
-        processQueue(refreshError);
-        isRefreshing = false;
-        logger.error('Token refresh failed:', refreshError);
-
-        // Refresh token도 만료된 경우 - 로그아웃 처리
-        return Promise.reject(refreshError);
-      }
-    }
-
-    return Promise.reject(error);
-  }
-);
 
 // API 응답 타입 정의
 export interface AuthResponse {
@@ -107,7 +29,7 @@ class AuthService {
   ): Promise<SocialLoginResponse> {
     try {
       logger.info(`Logging in with ${provider}...`);
-      const response = await apiClient.post<SocialLoginResponse>('/auth/social-login', {
+      const response = await apiClient.post<SocialLoginResponse>('/api/auth/social-login', {
         provider,
         token,
       });
@@ -134,7 +56,7 @@ class AuthService {
   async emailLogin(email: string, password: string): Promise<EmailLoginResponse> {
     try {
       logger.info('Logging in with email:', email);
-      const response = await apiClient.post<EmailLoginResponse>('/auth/email-login', {
+      const response = await apiClient.post<EmailLoginResponse>('/api/auth/email-login', {
         email,
         password,
       });
@@ -166,7 +88,7 @@ class AuthService {
   ): Promise<EmailRegisterResponse> {
     try {
       logger.info('Registering with email:', email);
-      const response = await apiClient.post<EmailRegisterResponse>('/auth/email-register', {
+      const response = await apiClient.post<EmailRegisterResponse>('/api/auth/email-register', {
         email,
         password,
         nickname,
@@ -190,7 +112,7 @@ class AuthService {
    */
   async getCurrentUser(): Promise<SocialLoginResponse> {
     try {
-      const response = await apiClient.get<SocialLoginResponse>('/auth/me');
+      const response = await apiClient.get<SocialLoginResponse>('/api/auth/me');
       return response.data;
     } catch (error: any) {
       // 401은 로그인 안 한 상태 (정상)
@@ -209,7 +131,7 @@ class AuthService {
   async logout(): Promise<void> {
     try {
       logger.info('Logging out...');
-      await apiClient.post('/auth/logout');
+      await apiClient.post('/api/auth/logout');
     } catch (error) {
       logger.error('Logout error:', error);
     }
@@ -219,7 +141,7 @@ class AuthService {
    * 닉네임 변경
    */
   async updateNickname(nickname?: string, bio?: string): Promise<AuthResponse> {
-    const response = await apiClient.put<AuthResponse>('/auth/update-nickname', {
+    const response = await apiClient.put<AuthResponse>('/api/auth/update-nickname', {
       nickname,
       bio,
     });
@@ -233,7 +155,7 @@ class AuthService {
     age_group?: number | null;
     gender?: string | null;
   }): Promise<AuthResponse> {
-    const response = await apiClient.put<AuthResponse>('/auth/update-profile', data);
+    const response = await apiClient.put<AuthResponse>('/api/auth/update-profile', data);
     return response.data;
   }
 
@@ -243,7 +165,7 @@ class AuthService {
    * - 연관 데이터 보존 (call_history, points, ratings)
    */
   async deleteAccount(): Promise<{ message: string }> {
-    const response = await apiClient.delete<{ message: string }>('/auth/delete-account');
+    const response = await apiClient.delete<{ message: string }>('/api/auth/delete-account');
     return response.data;
   }
 
@@ -267,7 +189,7 @@ class AuthService {
     const response = await apiClient.post<{
       message: string;
       data: { imageUrl: string; userInfo: User };
-    }>('/upload/profile-image', formData, {
+    }>('/api/upload/profile-image', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },

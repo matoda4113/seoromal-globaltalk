@@ -1,13 +1,5 @@
-import axios from 'axios';
+import apiClient from '@/lib/apiClient';
 import logger from '@/lib/logger';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-
-// axios 인스턴스 생성 (withCredentials: true로 Cookie 자동 전송)
-const apiClient = axios.create({
-  baseURL: API_BASE_URL,
-  withCredentials: true,
-});
 
 export interface SubmitRatingRequest {
   ratedUserId: number;
@@ -45,7 +37,7 @@ class RatingsService {
   async submitRating(data: SubmitRatingRequest): Promise<SubmitRatingResponse> {
     try {
       logger.info('Submitting rating...', data);
-      const response = await apiClient.post<SubmitRatingResponse>('/ratings', data);
+      const response = await apiClient.post<SubmitRatingResponse>('/api/ratings', data);
       logger.info('Rating submitted successfully');
       return response.data;
     } catch (error) {
@@ -61,7 +53,7 @@ class RatingsService {
   async getUserRatings(userId: number): Promise<GetUserRatingsResponse> {
     try {
       logger.info('Fetching user ratings...', userId);
-      const response = await apiClient.get<GetUserRatingsResponse>(`/ratings/${userId}`);
+      const response = await apiClient.get<GetUserRatingsResponse>(`/api/ratings/${userId}`);
       logger.info('User ratings fetched successfully');
       return response.data;
     } catch (error) {
