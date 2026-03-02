@@ -146,8 +146,8 @@ function LoginPageContent() {
   });
 
   const handleKakaoLogin = () => {
-    const KAKAO_REST_API_KEY = process.env.NEXT_PUBLIC_KAKAO_REST_API_KEY || '8f9c9a8fa2585db6084c6e93f07a8e0a';
-    const REDIRECT_URI = `${window.location.origin}/auth/kakao/callback`;
+    const KAKAO_REST_API_KEY = process.env.NEXT_PUBLIC_KAKAO_REST_API_KEY || '1bccb4263099e4c40c3e227f662bf9ba';
+    const REDIRECT_URI = `${process.env.NEXT_PUBLIC_ORIGIN_URL}/login/kakao`;
     const kakaoAuthUrl = `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_REST_API_KEY}&redirect_uri=${REDIRECT_URI}&response_type=code`;
 
     window.location.href = kakaoAuthUrl;

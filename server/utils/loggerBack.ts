@@ -1,5 +1,12 @@
-// 간단한 로거 유틸리티
-export const logger = {
+// 백엔드 로거 유틸리티
+const isDev = process.env.NODE_ENV === 'development';
+
+export const loggerBack = {
+  log: (message: string, ...args: any[]) => {
+    if (isDev) {
+      console.log(`[LOG] ${new Date().toISOString()} - ${message}`, ...args);
+    }
+  },
   info: (message: string, ...args: any[]) => {
     console.log(`[INFO] ${new Date().toISOString()} - ${message}`, ...args);
   },
@@ -10,8 +17,10 @@ export const logger = {
     console.warn(`[WARN] ${new Date().toISOString()} - ${message}`, ...args);
   },
   debug: (message: string, ...args: any[]) => {
-    if (process.env.NODE_ENV === 'development') {
+    if (isDev) {
       console.debug(`[DEBUG] ${new Date().toISOString()} - ${message}`, ...args);
     }
   },
 };
+
+export default loggerBack;

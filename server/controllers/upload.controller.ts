@@ -3,7 +3,7 @@ import multer from 'multer';
 import sharp from 'sharp';
 import { supabase } from '../lib/supabase.js';
 import { pool } from '../lib/db.js';
-import { logger } from '../utils/logger.js';
+import loggerBack from '../utils/loggerBack.js';
 import { v4 as uuidv4 } from 'uuid';
 
 // Multer 설정 - 메모리 스토리지 사용
@@ -47,14 +47,14 @@ export async function uploadProfileImage(req: Request, res: Response) {
       });
     }
 
-    logger.info(`Processing profile image for user ${userId}, mimetype: ${file.mimetype}`);
+    loggerBack.info(`Processing profile image for user ${userId}, mimetype: ${file.mimetype}`);
 
     // 이미지 처리: webp가 아니면 변환
     let processedBuffer: Buffer;
 
     if (file.mimetype === 'image/webp') {
       // 이미 webp인 경우: 크기만 조정
-      logger.info('Image is already webp, resizing only');
+      loggerBack.info('Image is already webp, resizing only');
       processedBuffer = await sharp(file.buffer)
         .resize(1024, 1024, {
           fit: 'inside',
@@ -64,7 +64,7 @@ export async function uploadProfileImage(req: Request, res: Response) {
         .toBuffer();
     } else {
       // webp가 아닌 경우: webp로 변환 + 리사이즈
-      logger.info(`Converting ${file.mimetype} to webp`);
+      loggerBack.info(`Converting ${file.mimetype} to webp`);
       processedBuffer = await sharp(file.buffer)
         .resize(1024, 1024, {
           fit: 'inside',
@@ -79,7 +79,7 @@ export async function uploadProfileImage(req: Request, res: Response) {
     const fileName = `${userId}-${uuidv4()}.${fileExt}`;
     const filePath = `user-image/${fileName}`;
 
-    logger.info(`Uploading profile image for user ${userId}: ${fileName}`);
+    loggerBack.info(`Uploading profile image for user ${userId}: ${fileName}`);
 
     // Supabase Storage에 업로드 (처리된 이미지 사용)
     const { data: uploadData, error: uploadError } = await supabase.storage
@@ -90,21 +90,21 @@ export async function uploadProfileImage(req: Request, res: Response) {
       });
 
     if (uploadError) {
-      logger.error('Supabase upload error:', uploadError);
+      loggerBack.error('Supabase upload error:', uploadError);
       return res.status(500).json({
         message: 'Failed to upload image to storage',
         error: uploadError.message,
       });
     }
 
-    logger.info(`Image uploaded successfully: ${uploadData.path}`);
+    loggerBack.info(`Image uploaded successfully: ${uploadData.path}`);
 
     // Public URL 생성
     const { data: urlData } = supabase.storage.from('images').getPublicUrl(filePath);
 
     const publicUrl = urlData.publicUrl;
 
-    logger.info(`Public URL generated: ${publicUrl}`);
+    loggerBack.info(`Public URL generated: ${publicUrl}`);
 
     // 데이터베이스에 URL 저장
     const result = await client.query(
@@ -119,7 +119,7 @@ export async function uploadProfileImage(req: Request, res: Response) {
 
     const user = result.rows[0];
 
-    logger.info(`Profile image URL saved to database for user ${userId}`);
+    loggerBack.info(`Profile image URL saved to database for user ${userId}`);
 
     return res.json({
       message: 'Profile image uploaded successfully',
@@ -142,7 +142,7 @@ export async function uploadProfileImage(req: Request, res: Response) {
       },
     });
   } catch (error) {
-    logger.error('Upload profile image error:', error);
+    loggerBack.error('Upload profile image error:', error);
     return res.status(500).json({
       message: 'Internal server error',
     });

@@ -1,5 +1,5 @@
 import translate from '@vitalets/google-translate-api';
-import logger from '@/lib/logger';
+import loggerBack from '../utils/loggerBack';
 
 // 언어 코드 매핑 (방 언어 → Google Translate 언어 코드)
 const LANGUAGE_MAP: { [key: string]: string } = {
@@ -20,10 +20,10 @@ export async function translateText(text: string, targetLanguage: string): Promi
 
     const result = await translate(text, { to: targetLangCode });
 
-    logger.log(`🌐 번역 성공: "${text}" → "${result.text}" (${targetLangCode})`);
+    loggerBack.log(`🌐 번역 성공: "${text}" → "${result.text}" (${targetLangCode})`);
     return result.text;
   } catch (error) {
-    logger.error('❌ 번역 실패:', error);
+    loggerBack.error('❌ 번역 실패:', error);
     // 번역 실패 시 원본 텍스트 반환
     return text;
   }

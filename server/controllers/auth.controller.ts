@@ -3,7 +3,7 @@ import { pool } from '../lib/db';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import axios from 'axios';
-import logger from "@/lib/logger";
+import loggerBack from "../utils/loggerBack";
 import { getUserPoints, addPoints } from '../lib/points';
 
 
@@ -16,6 +16,7 @@ interface TokenVerificationResult {
   name?: string;
   socialId: string;
   provider: string;
+  profileImage?: string;
 }
 
 /**
@@ -64,7 +65,7 @@ async function getUserRating(userId: number) {
       }
     };
   } catch (error) {
-    logger.error('Failed to get user rating:', error);
+    loggerBack.error('Failed to get user rating:', error);
     return {
       averageRating: 0,
       totalRatings: 0,
@@ -116,9 +117,9 @@ export async function socialLogin(req: Request, res: Response) {
     // DB 연결 시도
     try {
       client = await pool.connect();
-      logger.info('Database connection established');
+      loggerBack.info('Database connection established');
     } catch (dbError) {
-      logger.error('Database connection failed:', dbError);
+      loggerBack.error('Database connection failed:', dbError);
       return res.status(500).json({
         message: 'Database connection failed',
         error: process.env.NODE_ENV === 'development' ? String(dbError) : undefined,
@@ -173,8 +174,8 @@ export async function socialLogin(req: Request, res: Response) {
       // 신규 사용자 생성
       isNewUser = true;
       const insertQuery = `
-        INSERT INTO users (email, name, nickname, provider, social_id)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO users (email, name, nickname, provider, social_id,profile_image_url)
+        VALUES ($1, $2, $3, $4, $5,$6)
         RETURNING *
       `;
       result = await client.query(insertQuery, [
@@ -183,6 +184,7 @@ export async function socialLogin(req: Request, res: Response) {
         userInfo.name || '사용자',
         provider,
         userInfo.socialId,
+        userInfo.profileImage,
       ]);
       user = result.rows[0];
 
@@ -218,7 +220,7 @@ export async function socialLogin(req: Request, res: Response) {
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30일
     });
 
-    logger.info('Cookies set successfully');
+    loggerBack.info('Cookies set successfully');
 
     // 신규 가입자는 201, 기존 사용자는 200 상태 코드 반환
     return res.status(isNewUser ? 201 : 200).json({
@@ -228,7 +230,7 @@ export async function socialLogin(req: Request, res: Response) {
       },
     });
   } catch (error) {
-    logger.error('Social login error:', error);
+    loggerBack.error('Social login error:', error);
     return res.status(500).json({
       message: 'Internal server error',
     });
@@ -310,7 +312,7 @@ export async function emailRegister(req: Request, res: Response) {
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30일
     });
 
-    logger.info('Cookies set successfully');
+    loggerBack.info('Cookies set successfully');
 
     return res.status(201).json({
       message: 'Registration successful',
@@ -319,7 +321,7 @@ export async function emailRegister(req: Request, res: Response) {
       },
     });
   } catch (error) {
-    logger.error('Email register error:', error);
+    loggerBack.error('Email register error:', error);
     return res.status(500).json({
       message: 'Internal server error',
     });
@@ -391,7 +393,7 @@ export async function emailLogin(req: Request, res: Response) {
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30일
     });
 
-    logger.info('Cookies set successfully');
+    loggerBack.info('Cookies set successfully');
 
     return res.json({
       message: 'Login successful',
@@ -400,7 +402,7 @@ export async function emailLogin(req: Request, res: Response) {
       },
     });
   } catch (error) {
-    logger.error('Email login error:', error);
+    loggerBack.error('Email login error:', error);
     return res.status(500).json({
       message: 'Internal server error',
     });
@@ -489,7 +491,7 @@ export async function getCurrentUser(req: Request, res: Response) {
       },
     });
   } catch (error) {
-    logger.error('Get current user error:', error);
+    loggerBack.error('Get current user error:', error);
     return res.status(500).json({
       message: 'Internal server error',
     });
@@ -570,7 +572,7 @@ export async function updateNickname(req: Request, res: Response) {
       },
     });
   } catch (error) {
-    logger.error('Update profile error:', error);
+    loggerBack.error('Update profile error:', error);
     return res.status(500).json({
       message: 'Internal server error',
     });
@@ -634,7 +636,7 @@ export async function updateProfile(req: Request, res: Response) {
       },
     });
   } catch (error) {
-    logger.error('Update profile error:', error);
+    loggerBack.error('Update profile error:', error);
     return res.status(500).json({
       message: 'Internal server error',
     });
@@ -671,7 +673,7 @@ export async function deleteAccount(req: Request, res: Response) {
       message: 'Account deleted successfully',
     });
   } catch (error) {
-    logger.error('Delete account error:', error);
+    loggerBack.error('Delete account error:', error);
     return res.status(500).json({
       message: 'Internal server error',
     });
@@ -698,7 +700,7 @@ async function verifyGoogleToken(accessToken: string): Promise<TokenVerification
       provider: 'google',
     };
   } catch (error) {
-    logger.error('Google token verification failed:', error);
+    loggerBack.error('Google token verification failed:', error);
     return null;
   }
 }
@@ -707,12 +709,9 @@ async function verifyGoogleToken(accessToken: string): Promise<TokenVerification
  * Kakao 토큰 검증
  */
 async function verifyKakaoToken(token: string): Promise<TokenVerificationResult | null> {
-  const KAKAO_REST_API_KEY = process.env.NEXT_PUBLIC_KAKAO_REST_API_KEY || '8f9c9a8fa2585db6084c6e93f07a8e0a';
+  const KAKAO_REST_API_KEY = process.env.NEXT_PUBLIC_KAKAO_REST_API_KEY || '1bccb4263099e4c40c3e227f662bf9ba';
   const KAKAO_CLIENT_SECRET = process.env.KAKAO_CLIENT_SECRET;
-  const REDIRECT_URI =
-    process.env.NODE_ENV === 'production'
-      ? 'https://seoromal.co.kr/login/kakao'
-      : 'http://localhost:4000/login/kakao';
+  const REDIRECT_URI =`${process.env.NEXT_PUBLIC_ORIGIN_URL}/login/kakao`;
 
   // 먼저 Access Token으로 시도
   try {
@@ -734,7 +733,7 @@ async function verifyKakaoToken(token: string): Promise<TokenVerificationResult 
     };
   } catch (error: any) {
     // Access Token으로 실패하면 Authorization Code로 간주하고 교환 시도
-    logger.debug('Access Token 실패, Authorization Code로 교환 시도');
+    loggerBack.debug('Access Token 실패, Authorization Code로 교환 시도');
 
     try {
       const tokenResponse = await axios.post(
@@ -767,14 +766,16 @@ async function verifyKakaoToken(token: string): Promise<TokenVerificationResult 
         throw new Error('Email not provided by Kakao');
       }
 
+
       return {
         email: kakao_account.email,
         name: kakao_account.profile?.nickname,
         socialId: String(id),
+        profileImage: kakao_account.profile?.profile_image_url,
         provider: 'kakao',
       };
     } catch (codeError: any) {
-      logger.error('Kakao token verification failed:', codeError);
+      loggerBack.error('Kakao token verification failed:', codeError);
       return null;
     }
   }
@@ -799,7 +800,7 @@ async function verifyLineToken(accessToken: string): Promise<TokenVerificationRe
       provider: 'line',
     };
   } catch (error) {
-    logger.error('LINE token verification failed:', error);
+    loggerBack.error('LINE token verification failed:', error);
     return null;
   }
 }
@@ -812,10 +813,10 @@ async function verifyAppleToken(token: string): Promise<TokenVerificationResult 
   // 여기서는 기본 구조만 제공
   try {
     // TODO: Apple JWT 검증 로직 구현
-    logger.warn('Apple login not fully implemented yet');
+    loggerBack.warn('Apple login not fully implemented yet');
     return null;
   } catch (error) {
-    logger.error('Apple token verification failed:', error);
+    loggerBack.error('Apple token verification failed:', error);
     return null;
   }
 }

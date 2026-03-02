@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import logger from '@/lib/logger';
+import loggerBack from '../utils/loggerBack';
 import dotenv from 'dotenv';
 dotenv.config();
 // Connection Pool 생성
@@ -16,12 +16,12 @@ export const pool = new Pool({
 
 // Pool 에러 핸들링
 pool.on('error', (err) => {
-  logger.error('Unexpected database pool error:', err);
+  loggerBack.error('Unexpected database pool error:', err);
 });
 
 // Pool 상태 모니터링 (개발 환경)
 if (process.env.NODE_ENV !== 'production') {
   pool.on('connect', () => {
-    logger.info('Database pool connected');
+    loggerBack.info('Database pool connected');
   });
 }

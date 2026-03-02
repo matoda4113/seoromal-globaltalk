@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { pool } from '../lib/db';
-import logger from "@/lib/logger";
+import loggerBack from "../utils/loggerBack";
 
 export interface AuthRequest extends Request {
   user?: {
@@ -108,7 +108,7 @@ export const getCallHistory = async (req: AuthRequest, res: Response) => {
       [userId, limit, offset]
     );
 
-    logger.log(`✅ Call history fetched for userId: ${userId}, role: ${role}, count: ${result.rows.length}, total: ${totalCount}`);
+    loggerBack.log(`✅ Call history fetched for userId: ${userId}, role: ${role}, count: ${result.rows.length}, total: ${totalCount}`);
 
     return res.json({
       message: 'Call history retrieved successfully',
@@ -126,7 +126,7 @@ export const getCallHistory = async (req: AuthRequest, res: Response) => {
       },
     });
   } catch (error) {
-    logger.error('❌ Error fetching call history:', error);
+    loggerBack.error('❌ Error fetching call history:', error);
     return res.status(500).json({ error: '통화 기록 조회 중 오류가 발생했습니다.' });
   }
 };

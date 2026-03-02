@@ -11,6 +11,13 @@ const notoSansJP = Noto_Sans_JP({ subsets: ["latin"], variable: "--font-noto-jp"
 export const metadata: Metadata = {
   title: "서로말 - 한일 언어교환 플랫폼",
   description: "서로 말하고, 서로 배우다. 익명 음성/화상 기반 한일 언어교환 플랫폼",
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico', sizes: 'any' },
+    ],
+    apple: '/apple-touch-icon.png',
+  },
 };
 
 export default function RootLayout({

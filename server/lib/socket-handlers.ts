@@ -1,5 +1,5 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
-import logger from "@/lib/logger";
+import loggerBack from "../utils/loggerBack";
 import type { User, AnonymousUser } from '@/types/user';
 import { pool } from './db';
 
@@ -45,7 +45,7 @@ export const userSocketIds = new Map<string, number>(); // socketId -> userId
 // 포인트 업데이트 알림 함수
 export function notifyPointsUpdate(userId: number, balance: number) {
   if (!_io) {
-    logger.warn('⚠️ Socket.IO not initialized');
+    loggerBack.warn('⚠️ Socket.IO not initialized');
     return;
   }
 
@@ -54,14 +54,14 @@ export function notifyPointsUpdate(userId: number, balance: number) {
 
   if (socketId) {
     _io.to(socketId).emit('pointsUpdated', { balance });
-    logger.log(`💰 userId ${userId}에게 잔액 업데이트 전송: ${balance}점`);
+    loggerBack.log(`💰 userId ${userId}에게 잔액 업데이트 전송: ${balance}점`);
   }
 }
 
 // 선물 수신 알림 함수
 export function notifyGiftReceived(userId: number, senderNickname: string, amount: number, newBalance: number) {
   if (!_io) {
-    logger.warn('⚠️ Socket.IO not initialized');
+    loggerBack.warn('⚠️ Socket.IO not initialized');
     return;
   }
 
@@ -70,7 +70,7 @@ export function notifyGiftReceived(userId: number, senderNickname: string, amoun
 
   if (socketId) {
     _io.to(socketId).emit('giftReceived', { senderNickname, amount, newBalance });
-    logger.log(`🎁 userId ${userId}에게 선물 알림 전송: ${senderNickname}님이 ${amount}점 선물`);
+    loggerBack.log(`🎁 userId ${userId}에게 선물 알림 전송: ${senderNickname}님이 ${amount}점 선물`);
   }
 }
 
@@ -120,7 +120,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
 
     // 로그인 유저가 아니면 정산 안 함
     if (!participant.userId) {
-      logger.log(`⚠️ 비로그인 유저는 정산 불가: ${participant.nickname}`);
+      loggerBack.log(`⚠️ 비로그인 유저는 정산 불가: ${participant.nickname}`);
       return;
     }
 
@@ -129,7 +129,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
       const guestTooShort = sessionDurationSeconds <= 15;
 
       if (guestTooShort) {
-        logger.log(`💰 Guest ${participant.nickname} - No settlement (session <= 15 seconds)`);
+        loggerBack.log(`💰 Guest ${participant.nickname} - No settlement (session <= 15 seconds)`);
         return;
       }
 
@@ -163,12 +163,12 @@ export function initializeSocketHandlers(io: SocketIOServer) {
                 callId
               ]
           );
-          logger.log(`💰 Guest ${participant.nickname} - Charged: ${guestCharge} points (${sessionMinutes}분, ${room.callType})`);
+          loggerBack.log(`💰 Guest ${participant.nickname} - Charged: ${guestCharge} points (${sessionMinutes}분, ${room.callType})`);
         }
 
 
       } catch (error) {
-        logger.error(`❌ 게스트 포인트 차감 실패:`, error);
+        loggerBack.error(`❌ 게스트 포인트 차감 실패:`, error);
       }
     }
 
@@ -193,9 +193,9 @@ export function initializeSocketHandlers(io: SocketIOServer) {
               callId
             ]
           );
-          logger.log(`💰 Host ${participant.nickname} - Earned: ${hostEarnings} points (${sessionMinutes}분, ${room.callType})`);
+          loggerBack.log(`💰 Host ${participant.nickname} - Earned: ${hostEarnings} points (${sessionMinutes}분, ${room.callType})`);
         } catch (error) {
-          logger.error(`❌ 호스트 포인트 지급 실패:`, error);
+          loggerBack.error(`❌ 호스트 포인트 지급 실패:`, error);
         }
       }
     }
@@ -204,7 +204,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
   // 호스트 조기 퇴장 패널티 처리
   async function applyHostPenalty(host: Participant, callId: number) {
     if (!host.userId) {
-      logger.log(`⚠️ 비로그인 호스트는 패널티 불가: ${host.nickname}`);
+      loggerBack.log(`⚠️ 비로그인 호스트는 패널티 불가: ${host.nickname}`);
       return;
     }
 
@@ -225,9 +225,9 @@ export function initializeSocketHandlers(io: SocketIOServer) {
           callId
         ]
       );
-      logger.log(`⚠️ Host ${host.nickname} - Early exit penalty applied: -${penaltyPoints} points`);
+      loggerBack.log(`⚠️ Host ${host.nickname} - Early exit penalty applied: -${penaltyPoints} points`);
     } catch (error) {
-      logger.error(`❌ 호스트 패널티 부여 실패:`, error);
+      loggerBack.error(`❌ 호스트 패널티 부여 실패:`, error);
     }
   }
 
@@ -243,7 +243,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
   ): Promise<number | null> {
     // 호스트와 게스트 모두 로그인 유저인 경우만 기록
     if (!host.userId || !guest?.userId) {
-      logger.log(`⚠️ call_history 기록 건너뛰기 (비로그인 유저 포함)`);
+      loggerBack.log(`⚠️ call_history 기록 건너뛰기 (비로그인 유저 포함)`);
       return null;
     }
 
@@ -286,10 +286,10 @@ export function initializeSocketHandlers(io: SocketIOServer) {
         ]
       );
       const callId = result.rows[0].call_id;
-      logger.log(`📝 call_history 기록 완료: ${room.id} (${sessionDurationSeconds}초) call_id=${callId}`);
+      loggerBack.log(`📝 call_history 기록 완료: ${room.id} (${sessionDurationSeconds}초) call_id=${callId}`);
       return callId;
     } catch (error) {
-      logger.error(`❌ call_history 기록 실패:`, error);
+      loggerBack.error(`❌ call_history 기록 실패:`, error);
       return null;
     }
   }
@@ -316,7 +316,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
 
         if (isHost) {
           // 호스트가 나감 - 방 삭제
-          logger.log(`🗑️ Room deleted: ${room.title} (host ${reason})`);
+          loggerBack.log(`🗑️ Room deleted: ${room.title} (host ${reason})`);
 
           const hasGuest = room.participants.length > 1;
           const guest = room.participants.find((p) => !p.isHost) || null;
@@ -391,11 +391,11 @@ export function initializeSocketHandlers(io: SocketIOServer) {
 
             // 게스트가 10분 이상 통화 후 나갈 때 평가 모달
             if (isTenMinutesOrMore && host.userId) {
-              logger.log(`⭐ Guest ${participant.nickname} can rate the host`);
+              loggerBack.log(`⭐ Guest ${participant.nickname} can rate the host`);
 
               room.participants.splice(participantIndex, 1);
               room.sessionStartedAt = undefined;
-              logger.log(`👋 ${participant.nickname} ${reason} room: ${room.title}`);
+              loggerBack.log(`👋 ${participant.nickname} ${reason} room: ${room.title}`);
 
               rooms.set(roomId, room);
 
@@ -412,7 +412,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
 
           room.participants.splice(participantIndex, 1);
           room.sessionStartedAt = undefined;
-          logger.log(`👋 ${participant.nickname} ${reason} room: ${room.title}`);
+          loggerBack.log(`👋 ${participant.nickname} ${reason} room: ${room.title}`);
 
           rooms.set(roomId, room);
 
@@ -431,15 +431,15 @@ export function initializeSocketHandlers(io: SocketIOServer) {
   }
 
   io.on('connection', (socket: Socket) => {
-    logger.log(`✅ Client connected: ${socket.id}`);
+    loggerBack.log(`✅ Client connected: ${socket.id}`);
 
     // 익명 사용자로 우선 등록
     anonymousUsers.set(socket.id, {
       socketId: socket.id,
       connectedAt: new Date(),
     });
-    logger.log(`👤 Anonymous user connected: ${socket.id}`);
-    logger.log(`📊 Total: ${authenticatedUsers.size} authenticated, ${anonymousUsers.size} anonymous`);
+    loggerBack.log(`👤 Anonymous user connected: ${socket.id}`);
+    loggerBack.log(`📊 Total: ${authenticatedUsers.size} authenticated, ${anonymousUsers.size} anonymous`);
 
     // 온라인 카운트 브로드캐스트
     broadcastOnlineCount();
@@ -451,7 +451,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
         // 익명 → 인증 전환
         if (anonymousUsers.has(socket.id)) {
           anonymousUsers.delete(socket.id);
-          logger.log(`🔄 익명 → 인증 전환: ${data.nickname} (${socket.id})`);
+          loggerBack.log(`🔄 익명 → 인증 전환: ${data.nickname} (${socket.id})`);
         }
 
         // 로그인한 사용자로 등록 (userId를 키로 사용 -> 중복 제거됨)
@@ -460,8 +460,8 @@ export function initializeSocketHandlers(io: SocketIOServer) {
           socketId: socket.id, // socketId 추가
         });
         userSocketIds.set(socket.id, data.userId);
-        logger.log(`🔐 Authenticated user: ${data.nickname} (userId: ${data.userId}, socketId: ${socket.id}) - age: ${data.ageGroup}, gender: ${data.gender}`);
-        logger.log(`📊 Total: ${authenticatedUsers.size} unique authenticated users, ${anonymousUsers.size} anonymous`);
+        loggerBack.log(`🔐 Authenticated user: ${data.nickname} (userId: ${data.userId}, socketId: ${socket.id}) - age: ${data.ageGroup}, gender: ${data.gender}`);
+        loggerBack.log(`📊 Total: ${authenticatedUsers.size} unique authenticated users, ${anonymousUsers.size} anonymous`);
 
         // 온라인 사용자 수 브로드캐스트
         broadcastOnlineCount();
@@ -474,7 +474,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
         .filter((room) => room.participants.length < room.maxParticipants)
         .map(serializeRoom);
       socket.emit('roomList', roomList);
-      logger.log(`📋 Room list sent to ${socket.id}: ${roomList.length} rooms`);
+      loggerBack.log(`📋 Room list sent to ${socket.id}: ${roomList.length} rooms`);
     });
 
     // 온라인 카운트 요청
@@ -494,7 +494,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
         anonymous: anonymousUsers.size,
         authenticatedUsers: authenticatedUserList,
       });
-      logger.log(`📊 Online count sent to ${socket.id}: ${totalOnline} users`);
+      loggerBack.log(`📊 Online count sent to ${socket.id}: ${totalOnline} users`);
     });
 
     // 방 만들기 (로그인 필수)
@@ -560,7 +560,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
           hostTotalRatings = parseInt(ratingQuery.rows[0].total_ratings);
         }
       } catch (error) {
-        logger.error('❌ Failed to fetch host info:', error);
+        loggerBack.error('❌ Failed to fetch host info:', error);
       }
 
       const room: Room = {
@@ -595,7 +595,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
 
       rooms.set(room.id, room);
       const privacyLabel = data.isPrivate ? '비공개' : '공개';
-      logger.log(`🏠 Room created: ${room.title} by ${user.nickname} (${data.roomType}, ${privacyLabel})`);
+      loggerBack.log(`🏠 Room created: ${room.title} by ${user.nickname} (${data.roomType}, ${privacyLabel})`);
 
       // 방 생성자에게 성공 응답
       socket.emit('roomCreated', { roomId: room.id });
@@ -605,7 +605,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
         ...serializeRoom(room),
         agoraAppId: process.env.NEXT_PUBLIC_AGORA_APP_ID || '',
       });
-      logger.log(`👋 Host auto-joined room: ${room.title}`);
+      loggerBack.log(`👋 Host auto-joined room: ${room.title}`);
 
       // 모든 클라이언트에게 새 방 알림
       io.emit('roomListUpdated', serializeRoom(room));
@@ -657,7 +657,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
           socket.emit('error', { message: '비밀번호가 일치하지 않습니다.' });
           return;
         }
-        logger.log(`🔐 비밀방 입장 성공: ${authUser.nickname} → ${room.title}`);
+        loggerBack.log(`🔐 비밀방 입장 성공: ${authUser.nickname} → ${room.title}`);
       }
 
       // 게스트인 경우 포인트 체크 (오디오: 10점, 비디오: 40점 미만이면 입장 불가)
@@ -673,14 +673,14 @@ export function initializeSocketHandlers(io: SocketIOServer) {
 
           // 방 타입에 따른 최소 포인트 체크
           const minPoints = room.callType === 'audio' ? 10 : 40;
-          logger.info(`💰 입장 포인트 체크: userId=${authUser.userId}, balance=${balance}, 방타입=${room.callType}, 필요포인트=${minPoints}`);
+          loggerBack.info(`💰 입장 포인트 체크: userId=${authUser.userId}, balance=${balance}, 방타입=${room.callType}, 필요포인트=${minPoints}`);
 
           if (balance < minPoints) {
             socket.emit('error', { message: `포인트가 부족합니다. (현재 ${balance}점, 최소 ${minPoints}점 필요)` });
             return;
           }
         } catch (error) {
-          logger.error('❌ 포인트 조회 실패:', error);
+          loggerBack.error('❌ 포인트 조회 실패:', error);
           socket.emit('error', { message: '포인트 확인 중 오류가 발생했습니다.' });
           return;
         }
@@ -705,13 +705,13 @@ export function initializeSocketHandlers(io: SocketIOServer) {
       };
 
       room.participants.push(newParticipant);
-      logger.log(`👋 User ${newParticipant.nickname} joined room: ${room.title}`);
-      logger.log(`👥 현재 참가자 목록 (${room.participants.length}/${room.maxParticipants}):`);
+      loggerBack.log(`👋 User ${newParticipant.nickname} joined room: ${room.title}`);
+      loggerBack.log(`👥 현재 참가자 목록 (${room.participants.length}/${room.maxParticipants}):`);
 
       // 2명이 모였으면 세션 시작
       if (room.participants.length === 2) {
         room.sessionStartedAt = new Date();
-        logger.log(`🎤 세션 시작: ${room.title} (${room.callType})`);
+        loggerBack.log(`🎤 세션 시작: ${room.title} (${room.callType})`);
       }
 
       rooms.set(room.id, room);
@@ -780,7 +780,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
         type: data.type || 'text', // 메시지 타입: text(수동) 또는 stt(음성인식)
       };
 
-      logger.log(`💬 Message from ${sender.nickname} in room ${room.title}: ${data.message} (${messageData.type})`);
+      loggerBack.log(`💬 Message from ${sender.nickname} in room ${room.title}: ${data.message} (${messageData.type})`);
 
       // 방의 모든 참가자에게 메시지 브로드캐스트
       room.participants.forEach((p) => {
@@ -817,7 +817,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
 
       // 방 제목 업데이트
       room.title = data.newTitle.trim();
-      logger.log(`✏️ Room title updated: ${room.id} -> "${room.title}"`);
+      loggerBack.log(`✏️ Room title updated: ${room.id} -> "${room.title}"`);
 
       // 방의 모든 참가자에게 업데이트된 방 정보 전송
       room.participants.forEach((p) => {
@@ -835,23 +835,23 @@ export function initializeSocketHandlers(io: SocketIOServer) {
       const anonUser = anonymousUsers.get(socket.id);
 
       if (authUser && userId) {
-        logger.log(`❌ Authenticated user disconnected: ${authUser.nickname} (userId: ${userId}, socketId: ${socket.id})`);
+        loggerBack.log(`❌ Authenticated user disconnected: ${authUser.nickname} (userId: ${userId}, socketId: ${socket.id})`);
         authenticatedUsers.delete(userId);
         userSocketIds.delete(socket.id);
       } else if (anonUser) {
-        logger.log(`❌ Anonymous user disconnected: ${socket.id}`);
+        loggerBack.log(`❌ Anonymous user disconnected: ${socket.id}`);
         anonymousUsers.delete(socket.id);
       }
 
       // 참가 중인 방에서 제거 (공통 로직 호출)
       await handleUserLeaveRoom(socket.id, 'disconnected');
 
-      logger.log(`📊 Total: ${authenticatedUsers.size} authenticated, ${anonymousUsers.size} anonymous`);
+      loggerBack.log(`📊 Total: ${authenticatedUsers.size} authenticated, ${anonymousUsers.size} anonymous`);
 
       // 온라인 사용자 수 브로드캐스트
       broadcastOnlineCount();
     });
   });
 
-  logger.log('✅ Socket.io handlers initialized');
+  loggerBack.log('✅ Socket.io handlers initialized');
 }

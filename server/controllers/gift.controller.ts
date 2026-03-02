@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { pool } from '../lib/db';
-import logger from '@/lib/logger';
+import loggerBack from '../utils/loggerBack';
 import { notifyPointsUpdate, notifyGiftReceived } from '../lib/socket-handlers';
 
 /**
@@ -77,7 +77,7 @@ export async function sendGift(req: Request, res: Response) {
 
       await pool.query('COMMIT');
 
-      logger.log(`🎁 선물 전송: ${senderUserId} → ${recipientUserId}, ${amount}점`);
+      loggerBack.log(`🎁 선물 전송: ${senderUserId} → ${recipientUserId}, ${amount}점`);
 
       // 발신자의 새 잔액 조회
       const newSenderBalanceResult = await pool.query(
@@ -106,7 +106,7 @@ export async function sendGift(req: Request, res: Response) {
       throw error;
     }
   } catch (error) {
-    logger.error('❌ 선물 전송 에러:', error);
+    loggerBack.error('❌ 선물 전송 에러:', error);
     return res.status(500).json({ error: '선물 전송 중 오류가 발생했습니다.' });
   }
 }

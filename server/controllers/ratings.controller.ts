@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { pool } from '../lib/db';
-import logger from '@/lib/logger';
+import loggerBack from '../utils/loggerBack';
 
 /**
  * 평가 제출
@@ -54,7 +54,7 @@ export async function submitRating(req: Request, res: Response) {
       [callId, raterUserId, ratedUserId, ratingScore, ratingComment]
     );
 
-    logger.log(`⭐ 평가 저장 완료: call_id=${callId}, rater=${raterUserId}, rated=${ratedUserId}, score=${ratingScore}`);
+    loggerBack.log(`⭐ 평가 저장 완료: call_id=${callId}, rater=${raterUserId}, rated=${ratedUserId}, score=${ratingScore}`);
 
     // 평가 받은 사람의 degree 업데이트
     if (ratingScore === 5) {
@@ -62,19 +62,19 @@ export async function submitRating(req: Request, res: Response) {
         `UPDATE users SET degree = degree + 0.1 WHERE id = $1`,
         [ratedUserId]
       );
-      logger.log(`📈 ${ratedUserId}의 degree +0.1 (5점 평가)`);
+      loggerBack.log(`📈 ${ratedUserId}의 degree +0.1 (5점 평가)`);
     } else if (ratingScore === 4) {
       await pool.query(
         `UPDATE users SET degree = degree + 0.05 WHERE id = $1`,
         [ratedUserId]
       );
-      logger.log(`📈 ${ratedUserId}의 degree +0.05 (4점 평가)`);
+      loggerBack.log(`📈 ${ratedUserId}의 degree +0.05 (4점 평가)`);
     } else if (ratingScore <= 2) {
       await pool.query(
         `UPDATE users SET degree = degree - 0.1 WHERE id = $1`,
         [ratedUserId]
       );
-      logger.log(`📉 ${ratedUserId}의 degree -0.1 (${ratingScore}점 평가)`);
+      loggerBack.log(`📉 ${ratedUserId}의 degree -0.1 (${ratingScore}점 평가)`);
     }
     // 3점은 중립 평가로 degree 변화 없음
 
@@ -84,7 +84,7 @@ export async function submitRating(req: Request, res: Response) {
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [raterUserId, 1, 'earn', 'rating_reward', 'ratings', callId]
     );
-    logger.log(`💰 평가자 ${raterUserId}에게 1포인트 지급`);
+    loggerBack.log(`💰 평가자 ${raterUserId}에게 1포인트 지급`);
 
     // 5점 받으면 평가받는 사람에게 보너스 1포인트 지급
     if (ratingScore === 5) {
@@ -93,12 +93,12 @@ export async function submitRating(req: Request, res: Response) {
          VALUES ($1, $2, $3, $4, $5, $6)`,
         [ratedUserId, 1, 'earn', 'five_star_bonus', 'ratings', callId]
       );
-      logger.log(`⭐ 5점 받음! ${ratedUserId}에게 보너스 1포인트 지급`);
+      loggerBack.log(`⭐ 5점 받음! ${ratedUserId}에게 보너스 1포인트 지급`);
     }
 
     return res.status(200).json({ message: '평가가 성공적으로 제출되었습니다.' });
   } catch (error) {
-    logger.error('❌ 평가 제출 에러:', error);
+    loggerBack.error('❌ 평가 제출 에러:', error);
     return res.status(500).json({ error: '평가 제출 중 오류가 발생했습니다.' });
   }
 }
@@ -142,7 +142,7 @@ export async function getUserRatings(req: Request, res: Response) {
       }
     });
   } catch (error) {
-    logger.error('❌ 평가 조회 에러:', error);
+    loggerBack.error('❌ 평가 조회 에러:', error);
     return res.status(500).json({ error: '평가 조회 중 오류가 발생했습니다.' });
   }
 }
