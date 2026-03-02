@@ -7,19 +7,12 @@ import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
 import LanguageSelector from '@/components/LanguageSelector';
 import pointsService, { type PointHistory } from '@/services/points.service';
 import logger from '@/lib/logger';
+import { translatePointReason, translatePointType } from '@/types/points';
 
 const translations = {
   ko: {
     pointsHistory: '도토리 내역',
     totalPoints: '총 도토리',
-    type: '구분',
-    amount: '금액',
-    reason: '사유',
-    date: '일시',
-    earn: '적립',
-    spend: '사용',
-    refund: '환불',
-    admin_adjust: '관리자 조정',
     noHistory: '도토리 내역이 없습니다',
     loading: '로딩 중...',
     loginRequired: '로그인이 필요합니다',
@@ -28,14 +21,6 @@ const translations = {
   en: {
     pointsHistory: 'Dotori History',
     totalPoints: 'Total Dotori',
-    type: 'Type',
-    amount: 'Amount',
-    reason: 'Reason',
-    date: 'Date',
-    earn: 'Earn',
-    spend: 'Spend',
-    refund: 'Refund',
-    admin_adjust: 'Admin Adjust',
     noHistory: 'No Dotori history',
     loading: 'Loading...',
     loginRequired: 'Login Required',
@@ -44,14 +29,6 @@ const translations = {
   ja: {
     pointsHistory: 'ドトリ履歴',
     totalPoints: '総ドトリ',
-    type: '区分',
-    amount: '金額',
-    reason: '理由',
-    date: '日時',
-    earn: '獲得',
-    spend: '使用',
-    refund: '返金',
-    admin_adjust: '管理者調整',
     noHistory: 'ドトリ履歴がありません',
     loading: '読み込み中...',
     loginRequired: 'ログインが必要です',
@@ -90,19 +67,10 @@ export default function PointsHistoryPage() {
 
   const pageT = translations[currentLanguage];
 
-  const getTypeText = (type: string) => {
-    const typeMap: { [key: string]: string } = {
-      earn: pageT.earn,
-      spend: pageT.spend,
-      refund: pageT.refund,
-      admin_adjust: pageT.admin_adjust,
-    };
-    return typeMap[type] || type;
-  };
 
   const getTypeColor = (type: string) => {
-    if (type === 'earn' || type === 'refund') return 'text-green-600';
-    if (type === 'spend') return 'text-red-600';
+    if (type === 'earn') return 'text-green-600';
+    if (type === 'charge') return 'text-red-600';
     return 'text-gray-600';
   };
 
@@ -201,14 +169,16 @@ export default function PointsHistoryPage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <span className={`text-sm font-semibold ${getTypeColor(item.type)}`}>
-                        {getTypeText(item.type)}
+                        {translatePointType(item.type, currentLanguage)}
                       </span>
                       <span className={`text-lg font-bold ${getTypeColor(item.type)}`}>
                         {item.amount > 0 ? '+' : ''}{item.amount.toLocaleString()}
                       </span>
                     </div>
                     {item.reason && (
-                      <p className="text-sm text-gray-600 mb-1">{item.reason}</p>
+                      <p className="text-sm text-gray-600 mb-1">
+                        {translatePointReason(item.reason, currentLanguage)}
+                      </p>
                     )}
                     <p className="text-xs text-gray-400">{formatDate(item.created_at)}</p>
                   </div>

@@ -1,61 +1,23 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
-import BottomNav, { type TabType } from '@/components/BottomNav';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useSocket } from '@/hooks/useSocket';
 import HomeScreen from './screens/HomeScreen';
-import CommunityScreen from './screens/CommunityScreen';
-import MyPageScreen from './screens/MyPageScreen';
 import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
 import LanguageSelector from '@/components/LanguageSelector';
 import OnlineUsersModal from './components/OnlineUsersModal';
 
-const translations = {
-  ko: {
-    nav: {
-      home: '홈',
-      community: '커뮤니티',
-      mypage: '마이페이지',
-    },
-  },
-  en: {
-    nav: {
-      home: 'Home',
-      community: 'Community',
-      mypage: 'My Page',
-    },
-  },
-  ja: {
-    nav: {
-      home: 'ホーム',
-      community: 'コミュニティ',
-      mypage: 'マイページ',
-    },
-  },
-};
-
 export default function AppPage() {
-  const searchParams = useSearchParams();
+  const router = useRouter();
   const { currentLanguage } = useGlobalSettings();
-  const [activeTab, setActiveTab] = useState<TabType>('home');
   const [showOnlineModal, setShowOnlineModal] = useState(false);
 
   // Socket 연결 (온라인 카운트 표시용)
   const { isConnected, onlineCount } = useSocket();
 
-  useEffect(() => {
-    // URL 쿼리 파라미터에서 tab 읽기
-    const tabParam = searchParams.get('tab');
-    if (tabParam && (tabParam === 'home' || tabParam === 'community' || tabParam === 'mypage')) {
-      setActiveTab(tabParam as TabType);
-    }
-  }, [searchParams]);
-
-  const t = translations[currentLanguage];
-
   return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pb-20">
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
         {/* Header */}
         <header
             className="px-4 py-3 flex justify-between items-center border-b border-gray-200 bg-white sticky top-0 z-50">
@@ -70,27 +32,24 @@ export default function AppPage() {
               <span>{onlineCount.total} online</span>
             </button>
           </div>
-          <LanguageSelector/>
+          <div className="flex items-center gap-2">
+            <LanguageSelector/>
+            {/* 마이페이지 버튼 */}
+            <button
+              onClick={() => router.push('/mypage')}
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+            </button>
+          </div>
         </header>
 
         {/* Main Content */}
         <main className="px-4 py-6">
-          {activeTab === 'home' && <HomeScreen/>}
-
-          {activeTab === 'community' && <CommunityScreen/>}
-
-          {activeTab === 'mypage' && <MyPageScreen/>}
+          <HomeScreen/>
         </main>
-
-
-        {/* Bottom Navigation */}
-        <BottomNav
-            homeText={t.nav.home}
-            communityText={t.nav.community}
-            mypageText={t.nav.mypage}
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-        />
 
         {/* Online Users Modal */}
         <OnlineUsersModal

@@ -2,6 +2,7 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 import loggerBack from "../utils/loggerBack";
 import type { User, AnonymousUser } from '@/types/user';
 import { pool } from './db';
+import { pointsService } from '../services/points.service';
 
 // 사용자 타입은 types/user.ts에서 import
 
@@ -149,24 +150,10 @@ export function initializeSocketHandlers(io: SocketIOServer) {
       const guestCharge = Math.max(baseCharge, timeBasedCharge);
 
       try {
-        // 게스트 포인트 차감 (points 테이블에 INSERT)
+        // 게스트 포인트 차감
         if(!hostEarlyExit){
-          await pool.query(
-              `INSERT INTO points (user_id, amount, type, reason, reference_type, reference_id)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-              [
-                participant.userId,
-                -guestCharge, // 음수 (차감)
-                'charge',
-                'call_charge',
-                'call_history',
-                callId
-              ]
-          );
-          loggerBack.log(`💰 Guest ${participant.nickname} - Charged: ${guestCharge} points (${sessionMinutes}분, ${room.callType})`);
+          await pointsService.chargeCallFee(participant.userId, guestCharge, callId);
         }
-
-
       } catch (error) {
         loggerBack.error(`❌ 게스트 포인트 차감 실패:`, error);
       }
@@ -180,20 +167,8 @@ export function initializeSocketHandlers(io: SocketIOServer) {
 
       if (hostEarnings > 0) {
         try {
-          // 호스트 포인트 지급 (points 테이블에 INSERT)
-          await pool.query(
-            `INSERT INTO points (user_id, amount, type, reason, reference_type, reference_id)
-             VALUES ($1, $2, $3, $4, $5, $6)`,
-            [
-              participant.userId,
-              hostEarnings, // 양수 (지급)
-              'earn',
-              'call_earning',
-              'call_history',
-              callId
-            ]
-          );
-          loggerBack.log(`💰 Host ${participant.nickname} - Earned: ${hostEarnings} points (${sessionMinutes}분, ${room.callType})`);
+          // 호스트 포인트 지급
+          await pointsService.grantCallEarning(participant.userId, hostEarnings, callId);
         } catch (error) {
           loggerBack.error(`❌ 호스트 포인트 지급 실패:`, error);
         }
@@ -208,24 +183,9 @@ export function initializeSocketHandlers(io: SocketIOServer) {
       return;
     }
 
-    // 패널티 포인트 (10분 미만 조기 퇴장)
-    const penaltyPoints = 5;
-
     try {
-      // 호스트 포인트 차감 (points 테이블에 INSERT)
-      await pool.query(
-        `INSERT INTO points (user_id, amount, type, reason, reference_type, reference_id)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [
-          host.userId,
-          -penaltyPoints, // 음수 (차감)
-          'charge',
-          'early_exit_penalty',
-          'call_history',
-          callId
-        ]
-      );
-      loggerBack.log(`⚠️ Host ${host.nickname} - Early exit penalty applied: -${penaltyPoints} points`);
+      // 호스트 조기 퇴장 패널티 적용
+      await pointsService.applyEarlyExitPenalty(host.userId, callId);
     } catch (error) {
       loggerBack.error(`❌ 호스트 패널티 부여 실패:`, error);
     }
@@ -313,6 +273,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
 
         // 10분 이상 통화했는지 체크 (테스트: 5초)
         const isTenMinutesOrMore = sessionDurationSeconds >= 600;
+        // const isTenMinutesOrMore = sessionDurationSeconds >= 5;
 
         if (isHost) {
           // 호스트가 나감 - 방 삭제
@@ -521,9 +482,9 @@ export function initializeSocketHandlers(io: SocketIOServer) {
         return;
       }
 
-      // 이미 참가 중인 방이 있는지 확인
+      // 이미 참가 중인 방이 있는지 확인 (userId 기준)
       const existingRoom = Array.from(rooms.values()).find((room) =>
-        room.participants.some((p) => p.socketId === socket.id)
+        room.participants.some((p) => p.userId === user.userId)
       );
 
       if (existingRoom) {
@@ -623,9 +584,9 @@ export function initializeSocketHandlers(io: SocketIOServer) {
       }
 
 
-      // 이미 다른 방에 참가 중인지 체크 (socketId 또는 userId로 확인)
+      // 이미 다른 방에 참가 중인지 체크 (userId 기준)
       for (const [roomId, existingRoom] of rooms.entries()) {
-        if (existingRoom.participants.some((p) => p.socketId === socket.id || p.userId === authUser.userId)) {
+        if (existingRoom.participants.some((p) => p.userId === authUser.userId)) {
           socket.emit('error', { message: '이미 다른 방에 참가 중입니다.' });
           return;
         }
@@ -664,11 +625,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
       let guestBalance: number | undefined;
       if (!isHost) {
         try {
-          const pointsResult = await pool.query(
-            `SELECT COALESCE(SUM(amount), 0)::int AS balance FROM points WHERE user_id = $1`,
-            [authUser.userId]
-          );
-          const balance: number = pointsResult.rows[0].balance;
+          const balance = await pointsService.getBalance(authUser.userId);
           guestBalance = balance;
 
           // 방 타입에 따른 최소 포인트 체크

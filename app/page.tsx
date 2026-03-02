@@ -205,11 +205,7 @@ export default function Home() {
         >
           {t.hero.cta}
         </button>
-        <div className="mt-4">
-          <button className="text-blue-600 text-sm underline">
-            {t.hero.login}
-          </button>
-        </div>
+
       </section>
 
       {/* Features Section - 모바일 최적화 (2열) */}

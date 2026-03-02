@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { pool } from '../lib/db';
 import loggerBack from '../utils/loggerBack';
 import { notifyPointsUpdate, notifyGiftReceived } from '../lib/socket-handlers';
+import { pointsService } from '../services/points.service';
 
 /**
  * 선물하기
@@ -29,18 +30,6 @@ export async function sendGift(req: Request, res: Response) {
       return res.status(400).json({ error: '자기 자신에게 선물할 수 없습니다.' });
     }
 
-    // 발신자 잔액 조회
-    const senderBalanceResult = await pool.query(
-      `SELECT COALESCE(SUM(amount), 0)::int AS balance FROM points WHERE user_id = $1`,
-      [senderUserId]
-    );
-    const senderBalance = senderBalanceResult.rows[0].balance;
-
-    // 잔액 확인
-    if (senderBalance < amount) {
-      return res.status(400).json({ error: `포인트가 부족합니다. (현재 ${senderBalance}점)` });
-    }
-
     // 수신자 존재 확인
     const recipientResult = await pool.query(
       `SELECT id FROM users WHERE id = $1`,
@@ -57,41 +46,15 @@ export async function sendGift(req: Request, res: Response) {
     );
     const senderNickname = senderResult.rows[0]?.nickname || 'Unknown';
 
-    // 트랜잭션 시작
-    await pool.query('BEGIN');
-
     try {
-      // 발신자 포인트 차감
-      await pool.query(
-        `INSERT INTO points (user_id, amount, type, reason, reference_type, reference_id)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [senderUserId, -amount, 'charge', 'gift_sent', 'users', recipientUserId]
-      );
-
-      // 수신자 포인트 지급
-      await pool.query(
-        `INSERT INTO points (user_id, amount, type, reason, reference_type, reference_id)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [recipientUserId, amount, 'earn', 'gift_received', 'users', senderUserId]
-      );
-
-      await pool.query('COMMIT');
-
-      loggerBack.log(`🎁 선물 전송: ${senderUserId} → ${recipientUserId}, ${amount}점`);
+      // 포인트 서비스를 통한 선물 전송 (잔액 체크 및 트랜잭션 처리 포함)
+      await pointsService.sendGift(senderUserId, recipientUserId, amount);
 
       // 발신자의 새 잔액 조회
-      const newSenderBalanceResult = await pool.query(
-        `SELECT COALESCE(SUM(amount), 0)::int AS balance FROM points WHERE user_id = $1`,
-        [senderUserId]
-      );
-      const newSenderBalance = newSenderBalanceResult.rows[0].balance;
+      const newSenderBalance = await pointsService.getBalance(senderUserId);
 
       // 수신자의 새 잔액 조회
-      const newRecipientBalanceResult = await pool.query(
-        `SELECT COALESCE(SUM(amount), 0)::int AS balance FROM points WHERE user_id = $1`,
-        [recipientUserId]
-      );
-      const newRecipientBalance = newRecipientBalanceResult.rows[0].balance;
+      const newRecipientBalance = await pointsService.getBalance(recipientUserId);
 
       // 소켓으로 알림
       notifyPointsUpdate(senderUserId, newSenderBalance); // 발신자는 잔액만 업데이트
@@ -102,7 +65,6 @@ export async function sendGift(req: Request, res: Response) {
         newBalance: newSenderBalance,
       });
     } catch (error) {
-      await pool.query('ROLLBACK');
       throw error;
     }
   } catch (error) {

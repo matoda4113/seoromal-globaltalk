@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { pool } from '../lib/db';
 import loggerBack from '../utils/loggerBack';
+import { pointsService } from '../services/points.service';
 
 /**
  * 평가 제출
@@ -79,21 +80,11 @@ export async function submitRating(req: Request, res: Response) {
     // 3점은 중립 평가로 degree 변화 없음
 
     // 평가한 사람에게 1포인트 지급
-    await pool.query(
-      `INSERT INTO points (user_id, amount, type, reason, reference_type, reference_id)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [raterUserId, 1, 'earn', 'rating_reward', 'ratings', callId]
-    );
-    loggerBack.log(`💰 평가자 ${raterUserId}에게 1포인트 지급`);
+    await pointsService.grantRatingReward(raterUserId, callId);
 
     // 5점 받으면 평가받는 사람에게 보너스 1포인트 지급
     if (ratingScore === 5) {
-      await pool.query(
-        `INSERT INTO points (user_id, amount, type, reason, reference_type, reference_id)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [ratedUserId, 1, 'earn', 'five_star_bonus', 'ratings', callId]
-      );
-      loggerBack.log(`⭐ 5점 받음! ${ratedUserId}에게 보너스 1포인트 지급`);
+      await pointsService.grantFiveStarBonus(ratedUserId, callId);
     }
 
     return res.status(200).json({ message: '평가가 성공적으로 제출되었습니다.' });

@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import axios from 'axios';
 import loggerBack from "../utils/loggerBack";
-import { getUserPoints, addPoints } from '../lib/points';
+import { pointsService } from '../services/points.service';
 
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
@@ -189,11 +189,11 @@ export async function socialLogin(req: Request, res: Response) {
       user = result.rows[0];
 
       // 신규 가입자에게 50포인트 지급
-      await addPoints(pool, user.id, 50, 'earn', '회원가입 축하 포인트', 'signup');
+      await pointsService.grantSignupBonus(user.id);
     }
 
     // 사용자 포인트 조회
-    const userPoints = await getUserPoints(pool, user.id);
+    const userPoints = await pointsService.getBalance(user.id);
 
     // 사용자 평점 조회
     const userRating = await getUserRating(user.id);
@@ -282,10 +282,10 @@ export async function emailRegister(req: Request, res: Response) {
     const user = result.rows[0];
 
     // 신규 가입자에게 50포인트 지급
-    await addPoints(pool, user.id, 50, 'earn', '회원가입 축하 포인트', 'signup');
+    await pointsService.grantSignupBonus(user.id);
 
     // 사용자 포인트 조회
-    const userPoints = await getUserPoints(pool, user.id);
+    const userPoints = await pointsService.getBalance(user.id);
 
     // 사용자 평점 조회
     const userRating = await getUserRating(user.id);
@@ -366,7 +366,7 @@ export async function emailLogin(req: Request, res: Response) {
     }
 
     // 사용자 포인트 조회
-    const userPoints = await getUserPoints(pool, user.id);
+    const userPoints = await pointsService.getBalance(user.id);
 
     // 사용자 평점 조회
     const userRating = await getUserRating(user.id);
@@ -479,7 +479,7 @@ export async function getCurrentUser(req: Request, res: Response) {
     }
 
     // 사용자 포인트 조회
-    const userPoints = await getUserPoints(pool, user.id);
+    const userPoints = await pointsService.getBalance(user.id);
 
     // 사용자 평점 조회
     const userRating = await getUserRating(user.id);
