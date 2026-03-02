@@ -163,7 +163,12 @@ function LoginPageContent() {
   };
 
   const handleAppleLogin = () => {
-    alert('Apple 로그인은 준비 중입니다.');
+    const APPLE_CLIENT_ID = process.env.NEXT_PUBLIC_APPLE_CLIENT_ID || 'com.pureconnect.seoromal.web';
+    const REDIRECT_URI = `${process.env.NEXT_PUBLIC_ORIGIN_URL}/login/apple`;
+    const state = Math.random().toString(36).substring(7);
+    const appleAuthUrl = `https://appleid.apple.com/auth/authorize?client_id=${APPLE_CLIENT_ID}&redirect_uri=${REDIRECT_URI}&response_type=code&state=${state}&scope=email%20name&response_mode=form_post`;
+
+    window.location.href = appleAuthUrl;
   };
 
   const handleEmailButtonClick = () => {

@@ -9,6 +9,7 @@ import CommunityScreen from './screens/CommunityScreen';
 import MyPageScreen from './screens/MyPageScreen';
 import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
 import LanguageSelector from '@/components/LanguageSelector';
+import OnlineUsersModal from './components/OnlineUsersModal';
 
 const translations = {
   ko: {
@@ -38,6 +39,7 @@ export default function AppPage() {
   const searchParams = useSearchParams();
   const { currentLanguage } = useGlobalSettings();
   const [activeTab, setActiveTab] = useState<TabType>('home');
+  const [showOnlineModal, setShowOnlineModal] = useState(false);
 
   // Socket 연결 (온라인 카운트 표시용)
   const { isConnected, onlineCount } = useSocket();
@@ -59,11 +61,14 @@ export default function AppPage() {
             className="px-4 py-3 flex justify-between items-center border-b border-gray-200 bg-white sticky top-0 z-50">
           <div className="flex items-center gap-3">
             <div className="text-lg sm:text-xl font-bold text-blue-600">서로말</div>
-            {/* 온라인 사용자 수 */}
-            <div className="flex items-center gap-1 text-xs text-gray-600">
+            {/* 온라인 사용자 수 - 클릭 가능 */}
+            <button
+              onClick={() => setShowOnlineModal(true)}
+              className="flex items-center gap-1 text-xs text-gray-600 hover:text-blue-600 transition-colors px-2 py-1 rounded-full hover:bg-blue-50"
+            >
               <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
               <span>{onlineCount.total} online</span>
-            </div>
+            </button>
           </div>
           <LanguageSelector/>
         </header>
@@ -85,6 +90,14 @@ export default function AppPage() {
             mypageText={t.nav.mypage}
             activeTab={activeTab}
             onTabChange={setActiveTab}
+        />
+
+        {/* Online Users Modal */}
+        <OnlineUsersModal
+          isOpen={showOnlineModal}
+          onClose={() => setShowOnlineModal(false)}
+          authenticatedUsers={onlineCount.authenticatedUsers || []}
+          anonymousCount={onlineCount.anonymous || 0}
         />
 
       </div>

@@ -850,13 +850,49 @@ async function verifyLineToken(code: string): Promise<TokenVerificationResult | 
 /**
  * Apple 토큰 검증
  */
-async function verifyAppleToken(token: string): Promise<TokenVerificationResult | null> {
-  // Apple Sign In은 ID Token을 JWT로 검증해야 함
-  // 여기서는 기본 구조만 제공
+async function verifyAppleToken(code: string): Promise<TokenVerificationResult | null> {
   try {
-    // TODO: Apple JWT 검증 로직 구현
-    loggerBack.warn('Apple login not fully implemented yet');
-    return null;
+    const appleSignin = require('apple-signin-auth');
+
+    const APPLE_CLIENT_ID = process.env.NEXT_PUBLIC_APPLE_CLIENT_ID || 'com.pureconnect.seoromal.web';
+    const APPLE_TEAM_ID = process.env.APPLE_TEAM_ID;
+    const APPLE_KEY_ID = process.env.APPLE_KEY_ID;
+    const APPLE_PRIVATE_KEY = process.env.APPLE_PRIVATE_KEY;
+    const REDIRECT_URI = `${process.env.NEXT_PUBLIC_ORIGIN_URL}/login/apple`;
+
+    if (!APPLE_TEAM_ID || !APPLE_KEY_ID || !APPLE_PRIVATE_KEY) {
+      loggerBack.error('Apple OAuth credentials not configured');
+      return null;
+    }
+
+    // 1. Authorization Code를 Token으로 교환
+    const tokenResponse = await appleSignin.getAuthorizationToken(code, {
+      clientID: APPLE_CLIENT_ID,
+      redirectUri: REDIRECT_URI,
+      clientSecret: appleSignin.getClientSecret({
+        clientID: APPLE_CLIENT_ID,
+        teamID: APPLE_TEAM_ID,
+        keyIdentifier: APPLE_KEY_ID,
+        privateKey: APPLE_PRIVATE_KEY,
+      }),
+    });
+
+    // 2. ID Token 검증 및 디코딩
+    const { id_token } = tokenResponse;
+    const claims = await appleSignin.verifyIdToken(id_token, {
+      audience: APPLE_CLIENT_ID,
+      ignoreExpiration: false,
+    });
+
+    // 3. 사용자 정보 추출
+    const { sub: socialId, email } = claims;
+
+    return {
+      email: email || `${socialId}@appleid.apple.com`,
+      name: email?.split('@')[0] || 'Apple User',
+      socialId: socialId,
+      provider: 'apple',
+    };
   } catch (error) {
     loggerBack.error('Apple token verification failed:', error);
     return null;
