@@ -154,7 +154,12 @@ function LoginPageContent() {
   };
 
   const handleLineLogin = () => {
-    alert('LINE 로그인은 준비 중입니다.');
+    const LINE_CHANNEL_ID = process.env.NEXT_PUBLIC_LINE_CHANNEL_ID || '2009282903';
+    const REDIRECT_URI = `${process.env.NEXT_PUBLIC_ORIGIN_URL}/login/line`;
+    const state = Math.random().toString(36).substring(7); // CSRF 방지용 랜덤 문자열
+    const lineAuthUrl = `https://access.line.me/oauth2/v2.1/authorize?response_type=code&client_id=${LINE_CHANNEL_ID}&redirect_uri=${REDIRECT_URI}&state=${state}&scope=profile%20openid%20email`;
+
+    window.location.href = lineAuthUrl;
   };
 
   const handleAppleLogin = () => {

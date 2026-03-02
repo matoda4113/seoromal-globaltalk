@@ -784,19 +784,61 @@ async function verifyKakaoToken(token: string): Promise<TokenVerificationResult 
 /**
  * LINE 토큰 검증
  */
-async function verifyLineToken(accessToken: string): Promise<TokenVerificationResult | null> {
+async function verifyLineToken(code: string): Promise<TokenVerificationResult | null> {
   try {
-    const response = await axios.get('https://api.line.me/v2/profile', {
+    // 1. Authorization Code를 Access Token으로 교환
+    const LINE_CHANNEL_ID = process.env.NEXT_PUBLIC_LINE_CHANNEL_ID || '2009282903';
+    const LINE_CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET;
+    const REDIRECT_URI = `${process.env.NEXT_PUBLIC_ORIGIN_URL}/login/line`;
+
+    const tokenResponse = await axios.post(
+      'https://api.line.me/oauth2/v2.1/token',
+      new URLSearchParams({
+        grant_type: 'authorization_code',
+        code: code,
+        redirect_uri: REDIRECT_URI,
+        client_id: LINE_CHANNEL_ID,
+        client_secret: LINE_CHANNEL_SECRET || '',
+      }).toString(),
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      }
+    );
+
+    const accessToken = tokenResponse.data.access_token;
+
+    // 2. Access Token으로 프로필 정보 가져오기
+    const profileResponse = await axios.get('https://api.line.me/v2/profile', {
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
     });
 
-    // LINE은 이메일을 제공하지 않을 수 있으므로 userId를 이메일로 사용
+    const { userId, displayName, pictureUrl } = profileResponse.data;
+
+    // 3. 이메일 정보 가져오기 (ID Token에서 추출)
+    let email = `${userId}@line.me`; // 기본값
+    try {
+      const idToken = tokenResponse.data.id_token;
+      if (idToken) {
+        // ID Token을 디코딩하여 이메일 추출 (JWT 형식)
+        const payload = JSON.parse(Buffer.from(idToken.split('.')[1], 'base64').toString());
+        if (payload.email) {
+          email = payload.email;
+          loggerBack.log('LINE email found:', email);
+        }
+      }
+    } catch (emailError) {
+      loggerBack.log('LINE email not available, using default');
+    }
+
     return {
-      email: `${response.data.userId}@line.me`,
-      name: response.data.displayName,
-      socialId: response.data.userId,
+      email: email,
+      name: displayName,
+      socialId: userId,
+      profileImage: pictureUrl,
       provider: 'line',
     };
   } catch (error) {

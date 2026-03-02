@@ -11,6 +11,7 @@ interface SendGiftResponse {
   newBalance: number;
 }
 
+
 class GiftService {
   /**
    * 선물 보내기

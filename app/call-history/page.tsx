@@ -137,7 +137,6 @@ export default function CallHistoryPage() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [activeTab, setActiveTab] = useState<'all' | 'host' | 'guest'>('all');
-
   const fetchCallHistory = async (page: number = 1, append: boolean = false) => {
     if (!user) return;
 

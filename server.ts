@@ -69,6 +69,8 @@ app.prepare().then(() => {
     });
   });
 
+
+
   // API routes
   expressApp.use('/api/auth', authRoutes);
   expressApp.use('/api/points', pointsRoutes);
