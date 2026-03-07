@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
 import { Locale } from '@/types/locale';
 import logger from '@/lib/logger';
+import authService from '@/services/auth.service';
 
 const translations = {
   ko: {
@@ -98,24 +99,13 @@ export default function OnboardingPage() {
     try {
       setIsSubmitting(true);
 
-      // TODO: API 호출하여 프로필 업데이트
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/auth/update-profile`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          nickname: nickname.trim(),
-          gender: gender || null,
-          age_group: ageGroup,
-          country: country || null,
-        }),
+      // authService를 사용하여 프로필 업데이트
+      await authService.updateProfile({
+        nickname: nickname.trim(),
+        gender: gender || null,
+        age_group: ageGroup,
+        country: country || null,
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to update profile');
-      }
 
       logger.info('Profile updated successfully');
       await refreshUser();

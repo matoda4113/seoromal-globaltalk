@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
 import { User } from '@/types/user';
 
@@ -8,6 +9,9 @@ interface OnlineUsersModalProps {
   onClose: () => void;
   authenticatedUsers: User[];
   anonymousCount: number;
+  hasMore?: boolean;
+  currentPage?: number;
+  onRefresh?: (page: number) => void;
 }
 
 const translations = {
@@ -18,6 +22,7 @@ const translations = {
     count: '명',
     noUsers: '온라인 사용자가 없습니다',
     close: '닫기',
+    loadMore: '더보기',
   },
   en: {
     title: 'Online Users',
@@ -26,6 +31,7 @@ const translations = {
     count: 'users',
     noUsers: 'No online users',
     close: 'Close',
+    loadMore: 'Load More',
   },
   ja: {
     title: 'オンラインユーザー',
@@ -34,6 +40,7 @@ const translations = {
     count: '人',
     noUsers: 'オンラインユーザーがいません',
     close: '閉じる',
+    loadMore: 'もっと見る',
   },
 };
 
@@ -42,9 +49,44 @@ export default function OnlineUsersModal({
   onClose,
   authenticatedUsers = [],
   anonymousCount = 0,
+  hasMore = false,
+  currentPage = 1,
+  onRefresh,
 }: OnlineUsersModalProps) {
   const { currentLanguage } = useGlobalSettings();
   const t = translations[currentLanguage];
+  const [page, setPage] = useState(1);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
+
+  // 모달이 열릴 때 초기화 및 첫 페이지 로드
+  useEffect(() => {
+    if (isOpen) {
+      setPage(1);
+      setAllUsers([]);
+      if (onRefresh) {
+        onRefresh(1);
+      }
+    }
+  }, [isOpen]);
+
+  // authenticatedUsers가 업데이트되면 누적
+  useEffect(() => {
+    if (isOpen && authenticatedUsers.length > 0) {
+      if (currentPage === 1) {
+        setAllUsers(authenticatedUsers);
+      } else {
+        setAllUsers(prev => [...prev, ...authenticatedUsers]);
+      }
+    }
+  }, [authenticatedUsers, currentPage, isOpen]);
+
+  const handleLoadMore = () => {
+    const nextPage = page + 1;
+    setPage(nextPage);
+    if (onRefresh) {
+      onRefresh(nextPage);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -86,7 +128,7 @@ export default function OnlineUsersModal({
 
         {/* Content */}
         <div className="px-6 py-4 overflow-y-auto max-h-[calc(80vh-140px)]">
-          {authenticatedUsers.length === 0 && anonymousCount === 0 ? (
+          {allUsers.length === 0 && anonymousCount === 0 ? (
             <div className="text-center py-8">
               <div className="text-5xl mb-3">👥</div>
               <p className="text-gray-500">{t.noUsers}</p>
@@ -94,16 +136,16 @@ export default function OnlineUsersModal({
           ) : (
             <>
               {/* Authenticated Users */}
-              {authenticatedUsers.length > 0 && (
+              {allUsers.length > 0 && (
                 <div className="mb-6">
                   <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                     <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
                     </svg>
-                    {t.authenticatedUsers} ({authenticatedUsers.length})
+                    {t.authenticatedUsers} ({allUsers.length})
                   </h3>
                   <div className="space-y-2">
-                    {authenticatedUsers.map((user) => (
+                    {allUsers.map((user) => (
                       <div
                         key={user.userId}
                         className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
@@ -132,6 +174,16 @@ export default function OnlineUsersModal({
                       </div>
                     ))}
                   </div>
+
+                  {/* Load More Button */}
+                  {hasMore && (
+                    <button
+                      onClick={handleLoadMore}
+                      className="mt-3 w-full py-2 px-4 bg-blue-100 text-blue-600 rounded-lg font-medium hover:bg-blue-200 transition-colors"
+                    >
+                      {t.loadMore}
+                    </button>
+                  )}
                 </div>
               )}
 

@@ -86,19 +86,18 @@ export function initializeSocketHandlers(io: SocketIOServer) {
   // 방 목록 (임시 - 나중에 Redis로 변경)
   const rooms = new Map<string, Room>();
 
-  // 온라인 사용자 수 및 목록 브로드캐스트
+  // 온라인 사용자 수 브로드캐스트 (개인정보 제외, 통계만)
   function broadcastOnlineCount() {
     const totalOnline = authenticatedUsers.size + anonymousUsers.size;
 
-    // 로그인한 사용자 목록 (이미 userId를 키로 사용하므로 중복 없음)
-    const authenticatedUserList = Array.from(authenticatedUsers.values());
-
-    io.emit('onlineCount', {
+    io.to('lobby').emit('onlineCount', {
       total: totalOnline,
-      authenticated: authenticatedUsers.size,
-      anonymous: anonymousUsers.size,
-      authenticatedUsers: authenticatedUserList,
+      // authenticated: authenticatedUsers.size,
+      // anonymous: anonymousUsers.size,
     });
+
+
+
   }
 
   // Room 객체 직렬화
@@ -364,7 +363,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
                 io.to(p.socketId).emit('roomUpdated', serializeRoom(room));
               });
 
-              io.emit('roomListUpdated', serializeRoom(room));
+              io.to('lobby').emit('roomListUpdated', serializeRoom(room));
 
               // 평가 모달 정보 반환
               return { roomId, wasHost: isHost, showRatingModal: true, hostUserId: host.userId };
@@ -381,7 +380,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
             io.to(p.socketId).emit('roomUpdated', serializeRoom(room));
           });
 
-          io.emit('roomListUpdated', serializeRoom(room));
+          io.to('lobby').emit('roomListUpdated', serializeRoom(room));
         }
 
         return { roomId, wasHost: isHost };
@@ -393,7 +392,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
 
   io.on('connection', (socket: Socket) => {
     loggerBack.log(`✅ Client connected: ${socket.id}`);
-
+    socket.join('lobby');
     // 익명 사용자로 우선 등록
     anonymousUsers.set(socket.id, {
       socketId: socket.id,
@@ -425,7 +424,7 @@ export function initializeSocketHandlers(io: SocketIOServer) {
         loggerBack.log(`📊 Total: ${authenticatedUsers.size} unique authenticated users, ${anonymousUsers.size} anonymous`);
 
         // 온라인 사용자 수 브로드캐스트
-        broadcastOnlineCount();
+        // broadcastOnlineCount();
       }
     });
 
@@ -438,10 +437,15 @@ export function initializeSocketHandlers(io: SocketIOServer) {
       loggerBack.log(`📋 Room list sent to ${socket.id}: ${roomList.length} rooms`);
     });
 
-    // 온라인 카운트 요청
-    socket.on('getOnlineCount', () => {
+    // 온라인 카운트 요청 (페이지네이션 지원)
+    socket.on('getOnlineCount', (data?: { page?: number; limit?: number }) => {
       const totalOnline = authenticatedUsers.size + anonymousUsers.size;
-      const authenticatedUserList = Array.from(authenticatedUsers.values()).map(user => ({
+      const page = data?.page || 1;
+      const limit = data?.limit || 50;
+      // const limit = 1;
+
+      // 전체 인증 사용자 목록
+      const allAuthenticatedUsers = Array.from(authenticatedUsers.values()).map(user => ({
         userId: user.userId,
         nickname: user.nickname,
         profileImageUrl: user.profileImageUrl,
@@ -449,13 +453,34 @@ export function initializeSocketHandlers(io: SocketIOServer) {
         gender: user.gender,
       }));
 
+      // 페이지네이션 적용
+      const startIndex = (page - 1) * limit;
+      const endIndex = startIndex + limit;
+      const paginatedUsers = allAuthenticatedUsers.slice(startIndex, endIndex);
+      const hasMore = endIndex < allAuthenticatedUsers.length;
+
       socket.emit('onlineCount', {
         total: totalOnline,
         authenticated: authenticatedUsers.size,
         anonymous: anonymousUsers.size,
-        authenticatedUsers: authenticatedUserList,
+        authenticatedUsers: paginatedUsers,
+        page,
+        limit,
+        hasMore,
       });
-      loggerBack.log(`📊 Online count sent to ${socket.id}: ${totalOnline} users`);
+      loggerBack.log(`📊 Online count sent to ${socket.id}: page ${page}, ${paginatedUsers.length}/${allAuthenticatedUsers.length} users`);
+    });
+
+    // 대기실(로비) 입장
+    socket.on('joinLobby', () => {
+      socket.join('lobby');
+      loggerBack.log(`🚪 ${socket.id} joined lobby`);
+    });
+
+    // 대기실(로비) 퇴장
+    socket.on('leaveLobby', () => {
+      socket.leave('lobby');
+      loggerBack.log(`🚪 ${socket.id} left lobby`);
     });
 
     // 방 만들기 (로그인 필수)
@@ -561,6 +586,10 @@ export function initializeSocketHandlers(io: SocketIOServer) {
       // 방 생성자에게 성공 응답
       socket.emit('roomCreated', { roomId: room.id });
 
+      // 방을 만들면 로비에서 나감 (호스트가 방에 자동 입장하므로)
+      socket.leave('lobby');
+      loggerBack.log(`🚪 ${socket.id} left lobby (created room)`);
+
       // 호스트를 방에 자동으로 입장시킴
       socket.emit('roomJoined', {
         ...serializeRoom(room),
@@ -568,8 +597,8 @@ export function initializeSocketHandlers(io: SocketIOServer) {
       });
       loggerBack.log(`👋 Host auto-joined room: ${room.title}`);
 
-      // 모든 클라이언트에게 새 방 알림
-      io.emit('roomListUpdated', serializeRoom(room));
+      // 로비에 있는 클라이언트에게 새 방 알림
+      io.to('lobby').emit('roomListUpdated', serializeRoom(room));
     });
 
     // 방 입장 (로그인 유저만 가능)
@@ -673,6 +702,10 @@ export function initializeSocketHandlers(io: SocketIOServer) {
 
       rooms.set(room.id, room);
 
+      // 방에 입장하면 로비에서 나감
+      socket.leave('lobby');
+      loggerBack.log(`🚪 ${socket.id} left lobby (joined room)`);
+
       // 입장한 사용자에게 방 정보 전송 (게스트는 잔액 포함)
       socket.emit('roomJoined', {
         ...serializeRoom(room),
@@ -685,8 +718,9 @@ export function initializeSocketHandlers(io: SocketIOServer) {
         io.to(p.socketId).emit('roomUpdated', serializeRoom(room));
       });
 
-      // 모든 클라이언트에게 방 목록 업데이트
-      io.emit('roomListUpdated', serializeRoom(room));
+      // 로비에 있는 클라이언트에게 방 목록 업데이트
+      io.to('lobby').emit('roomListUpdated', serializeRoom(room));
+
     });
 
     // 방 나가기
@@ -697,6 +731,10 @@ export function initializeSocketHandlers(io: SocketIOServer) {
 
       // 나간 사용자에게 성공 응답
       if (result) {
+        // 방을 나가면 자동으로 로비에 재가입
+        socket.join('lobby');
+        loggerBack.log(`🔄 ${socket.id} re-joined lobby after leaving room`);
+
         socket.emit('roomLeft', {
           roomId: result.roomId,
           showRatingModal: result.showRatingModal,
@@ -781,8 +819,9 @@ export function initializeSocketHandlers(io: SocketIOServer) {
         io.to(p.socketId).emit('roomUpdated', serializeRoom(room));
       });
 
-      // 전체 사용자에게 방 목록 업데이트 알림
-      io.emit('roomListUpdated', serializeRoom(room));
+      // 로비에 있는 사용자에게 방 목록 업데이트 알림
+      io.to('lobby').emit('roomListUpdated', serializeRoom(room));
+
     });
 
     // 연결 해제

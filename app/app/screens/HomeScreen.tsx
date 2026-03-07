@@ -96,7 +96,8 @@ export default function HomeScreen() {
     ratingModalData,
     setRatingModalData,
     guestBalance,
-    giftNotification
+    giftNotification,
+    refreshOnlineCount
   } = useSocket();
   const [languageFilter, setLanguageFilter] = useState<'all' | 'ko' | 'en' | 'ja'>('all');
   const [topicFilter, setTopicFilter] = useState<'all' | 'free' | 'romance' | 'hobby' | 'business' | 'travel'>('all');
@@ -393,6 +394,9 @@ export default function HomeScreen() {
         onClose={() => setIsOnlineUsersModalOpen(false)}
         authenticatedUsers={onlineCount.authenticatedUsers || []}
         anonymousCount={onlineCount.anonymous || 0}
+        hasMore={onlineCount.hasMore}
+        currentPage={onlineCount.page}
+        onRefresh={refreshOnlineCount}
       />
 
       {/* Create Room Modal */}

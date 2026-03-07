@@ -149,11 +149,13 @@ class AuthService {
   }
 
   /**
-   * 프로필 정보 변경 (age_group, gender)
+   * 프로필 정보 변경 (nickname, age_group, gender, country)
    */
   async updateProfile(data: {
+    nickname?: string;
     age_group?: number | null;
     gender?: string | null;
+    country?: string | null;
   }): Promise<AuthResponse> {
     const response = await apiClient.put<AuthResponse>('/api/auth/update-profile', data);
     return response.data;

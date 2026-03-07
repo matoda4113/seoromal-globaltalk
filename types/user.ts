@@ -35,11 +35,14 @@ export interface AnonymousUser {
 }
 
 /**
- * 온라인 카운트 정보
+ * 온라인 카운트 정보 (페이지네이션 지원)
  */
 export interface OnlineCount {
   total: number;
   authenticated: number;
   anonymous: number;
-  authenticatedUsers: User[]; // socketId 포함된 User 배열
+  authenticatedUsers: User[]; // socketId 포함된 User 배열 (페이지네이션됨)
+  page?: number; // 현재 페이지
+  limit?: number; // 페이지당 개수
+  hasMore?: boolean; // 다음 페이지 존재 여부
 }

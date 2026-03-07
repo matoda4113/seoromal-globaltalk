@@ -64,12 +64,14 @@ export function useSocket() {
   const [giftNotification, setGiftNotification] = useState<{ senderNickname: string; amount: number } | null>(null); // 선물 알림
 
   useEffect(() => {
+
     const socket = getSocket();
 
     const handleConnect = () => {
       logger.info('✅ Socket connected:', socket.id);
       setIsConnected(true);
-      // 방 목록 요청
+      // 로비에 입장 및 방 목록 요청
+      socket.emit('joinLobby');
       socket.emit('getRooms');
     };
 
@@ -105,7 +107,7 @@ export function useSocket() {
     };
 
     const handleRoomListUpdated = (room: Room) => {
-      logger.debug('📝 Room list updated:', room);
+      logger.log('📝 Room list updated:', room);
       setRooms((prev) => {
         const index = prev.findIndex((r) => r.id === room.id);
         if (index !== -1) {
@@ -137,6 +139,8 @@ export function useSocket() {
       setMessages([]); // 방 나갈 때 메시지 초기화
       setGuestBalance(undefined); // 잔액 초기화
 
+      // 방을 나왔으므로 최신 방 목록 요청 (서버에서 이미 lobby에 재가입됨)
+      socket.emit('getRooms');
 
       if (data.showRatingModal && data.hostUserId) {
         logger.info('⭐ Showing rating modal for host:', data.hostUserId);
@@ -150,6 +154,10 @@ export function useSocket() {
       setCurrentRoom(null);
       setMessages([]); // 방 닫힐 때 메시지 초기화
       setGuestBalance(undefined); // 잔액 초기화
+
+      // 방이 닫혔으므로 로비에 재가입하고 최신 방 목록 요청
+      socket.emit('joinLobby');
+      socket.emit('getRooms');
 
       // 평가 모달 또는 일반 메시지 모달 표시
       if (data.showRatingModal && data.hostUserId) {
@@ -167,7 +175,7 @@ export function useSocket() {
     };
 
     const handleOnlineCount = (count: OnlineCount) => {
-      logger.debug('📊 Online count:', count);
+      logger.log('📊 Online count:', count);
       setOnlineCount(count);
     };
 
@@ -211,17 +219,10 @@ export function useSocket() {
     socket.on('pointsUpdated', handlePointsUpdated);
     socket.on('giftReceived', handleGiftReceived);
 
-    // 이미 연결되어 있다면 즉시 방 목록 요청 및 온라인 카운트 요청
-    if (socket.connected) {
-      logger.info('Socket already connected, requesting initial data');
-      setIsConnected(true);
-      socket.emit('getRooms');
-      // 서버에 온라인 카운트 재전송 요청
-      socket.emit('getOnlineCount');
-    }
 
-    // 클린업
+    // 클린업 - 컴포넌트 언마운트 시 로비에서 나감
     return () => {
+
       socket.off('connect', handleConnect);
       socket.off('disconnect', handleDisconnect);
       socket.off('roomList', handleRoomList);
@@ -290,6 +291,12 @@ export function useSocket() {
     socket.emit('updateRoomTitle', { roomId, newTitle });
   };
 
+  const refreshOnlineCount = (page: number = 1, limit: number = 50) => {
+    const socket = getSocket();
+    logger.info(`Requesting online count update: page ${page}, limit ${limit}`);
+    socket.emit('getOnlineCount', { page, limit });
+  };
+
   return {
     rooms,
     onlineCount,
@@ -306,5 +313,6 @@ export function useSocket() {
     authenticate,
     sendMessage,
     updateRoomTitle,
+    refreshOnlineCount,
   };
 }

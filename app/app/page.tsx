@@ -14,7 +14,7 @@ export default function AppPage() {
   const [showOnlineModal, setShowOnlineModal] = useState(false);
 
   // Socket 연결 (온라인 카운트 표시용)
-  const { isConnected, onlineCount } = useSocket();
+  const { isConnected, onlineCount, refreshOnlineCount } = useSocket();
 
   return (
       <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
@@ -57,6 +57,9 @@ export default function AppPage() {
           onClose={() => setShowOnlineModal(false)}
           authenticatedUsers={onlineCount.authenticatedUsers || []}
           anonymousCount={onlineCount.anonymous || 0}
+          hasMore={onlineCount.hasMore}
+          currentPage={onlineCount.page}
+          onRefresh={refreshOnlineCount}
         />
 
       </div>

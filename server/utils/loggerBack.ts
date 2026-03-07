@@ -1,5 +1,10 @@
 // 백엔드 로거 유틸리티
+
+import dotenv from "dotenv";
+
+dotenv.config();
 const isDev = process.env.NODE_ENV === 'development';
+// const isDev = true;
 
 export const loggerBack = {
   log: (message: string, ...args: any[]) => {
