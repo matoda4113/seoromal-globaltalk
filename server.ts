@@ -88,7 +88,8 @@ app.prepare().then(() => {
   });
 
   // Start unified server
-  httpServer.listen(PORT, '0.0.0.0', () => {
+  const numericPort = typeof PORT === 'string' ? parseInt(PORT, 10) : PORT;
+  httpServer.listen(numericPort, '0.0.0.0', () => {
     console.log(`🚀 SeRoMal Server running on http://0.0.0.0:${PORT}`);
     console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
   });
