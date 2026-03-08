@@ -65,8 +65,12 @@ export function useSocket() {
 
   useEffect(() => {
 
-    const socket = getSocket();
 
+    const socket = getSocket();
+    if (socket.connected) {
+      setIsConnected(true);
+      socket.emit('getOnlineCount', { page:1, limit:1 });
+    }
     const handleConnect = () => {
       logger.info('✅ Socket connected:', socket.id);
       setIsConnected(true);
@@ -174,10 +178,24 @@ export function useSocket() {
       alert(error.message);
     };
 
+
+
     const handleOnlineCount = (count: OnlineCount) => {
-      logger.log('📊 Online count:', count);
-      setOnlineCount(count);
+      logger.log('📊 Online count1:', count);
+      logger.log('📊 Online count2:', count.authenticated);
+      logger.log('📊 Online count3:', count.anonymous);
+      logger.log('📊 Online count4:', count.authenticatedUsers);
+      setOnlineCount((prev) => ({
+        total: count.total?? prev.total,
+        authenticated: count.authenticated?? prev.authenticated,
+        anonymous: count.anonymous?? prev.anonymous,
+        // authenticatedUsers가 있으면 업데이트, 없으면 기존 값 유지
+        authenticatedUsers: count.authenticatedUsers ?? prev.authenticatedUsers,
+
+      }));
     };
+
+
 
     const handleNewMessage = (message: ChatMessage) => {
       logger.info('💬 New message received:', message);
