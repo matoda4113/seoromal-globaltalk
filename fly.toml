@@ -7,6 +7,17 @@ app = 'seoromal-globaltalk'
 primary_region = 'nrt'
 
 [build]
+  [build.args]
+    NEXT_PUBLIC_SOCKET_URL = "https://seoromal-globaltalk.fly.dev"
+    NEXT_PUBLIC_API_URL = "https://seoromal-globaltalk.fly.dev"
+    NEXT_PUBLIC_ORIGIN_URL = "https://seoromal-globaltalk.fly.dev"
+    NEXT_PUBLIC_GOOGLE_CLIENT_ID = "1031534117080-6t8ghsq3bjf388sskma9lq7kuks01hbd.apps.googleusercontent.com"
+    NEXT_PUBLIC_KAKAO_REST_API_KEY = "1bccb4263099e4c40c3e227f662bf9ba"
+    NEXT_PUBLIC_LINE_CHANNEL_ID = "2009282903"
+    NEXT_PUBLIC_APPLE_CLIENT_ID = "com.pureconnect.seoromal.web"
+    NEXT_PUBLIC_SUPABASE_URL = "https://natvfpndptesdvokbcss.supabase.co"
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY = "sb_publishable_pu_pix-mjCtE_dObN2KssQ_vhvtr-K5"
+    NEXT_PUBLIC_AGORA_APP_ID = "03660376e6a6497eb44be9a375d5a14d"
 
 [http_service]
   internal_port = 4000

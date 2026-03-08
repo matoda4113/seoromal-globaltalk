@@ -6,6 +6,7 @@ node_modules
 .idea
 npm-debug.log
 README.md
+.env
 .env*.local
 .DS_Store
 *.log
