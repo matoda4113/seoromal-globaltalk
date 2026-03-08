@@ -1,4 +1,4 @@
-import translate from '@vitalets/google-translate-api';
+import { translate } from '@vitalets/google-translate-api';
 import loggerBack from '../utils/loggerBack';
 
 // 언어 코드 매핑 (방 언어 → Google Translate 언어 코드)
