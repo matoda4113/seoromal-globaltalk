@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import authService from '@/services/auth.service';
 import { useAuth } from '@/contexts/AuthContext';
 import logger from '@/lib/logger';
 
-export default function AppleCallbackPage() {
+function AppleCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login } = useAuth();
@@ -58,5 +58,20 @@ export default function AppleCallbackPage() {
         <p className="text-gray-600 font-semibold">Apple 로그인 처리 중...</p>
       </div>
     </div>
+  );
+}
+
+export default function AppleCallbackPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-gray-800 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600 font-semibold">로딩 중...</p>
+        </div>
+      </div>
+    }>
+      <AppleCallbackContent />
+    </Suspense>
   );
 }
