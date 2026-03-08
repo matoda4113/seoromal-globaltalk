@@ -88,8 +88,8 @@ app.prepare().then(() => {
   });
 
   // Start unified server
-  httpServer.listen(PORT, () => {
-    console.log(`🚀 SeRoMal Server running on http://localhost:${PORT}`);
+  httpServer.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 SeRoMal Server running on http://0.0.0.0:${PORT}`);
     console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
   });
 });
