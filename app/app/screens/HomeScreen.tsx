@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSocket, type Room } from '@/hooks/useSocket';
+import { useSocketContext } from '@/contexts/SocketContext';
+import type { Room } from '@/hooks/useSocket';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
 import RoomCard from '../components/RoomCard';
@@ -98,7 +99,7 @@ export default function HomeScreen() {
     guestBalance,
     giftNotification,
     refreshOnlineCount
-  } = useSocket();
+  } = useSocketContext();
   const [languageFilter, setLanguageFilter] = useState<'all' | 'ko' | 'en' | 'ja'>('all');
   const [topicFilter, setTopicFilter] = useState<'all' | 'free' | 'romance' | 'hobby' | 'business' | 'travel'>('all');
   const [isLanguageSheetOpen, setIsLanguageSheetOpen] = useState(false);

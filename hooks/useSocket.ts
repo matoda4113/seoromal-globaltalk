@@ -66,10 +66,14 @@ export function useSocket() {
   useEffect(() => {
 
 
+
     const socket = getSocket();
     if (socket.connected) {
       setIsConnected(true);
       socket.emit('getOnlineCount', { page:1, limit:1 });
+      socket.emit('getRooms');
+
+
     }
     const handleConnect = () => {
       logger.info('✅ Socket connected:', socket.id);
@@ -182,9 +186,6 @@ export function useSocket() {
 
     const handleOnlineCount = (count: OnlineCount) => {
       logger.log('📊 Online count1:', count);
-      logger.log('📊 Online count2:', count.authenticated);
-      logger.log('📊 Online count3:', count.anonymous);
-      logger.log('📊 Online count4:', count.authenticatedUsers);
       setOnlineCount((prev) => ({
         total: count.total?? prev.total,
         authenticated: count.authenticated?? prev.authenticated,
@@ -258,6 +259,7 @@ export function useSocket() {
       socket.off('giftReceived', handleGiftReceived);
     };
   }, [currentRoom]);
+
 
   const joinRoom = (roomId: string, nickname?: string, password?: string) => {
     const socket = getSocket();

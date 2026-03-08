@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSocket } from '@/hooks/useSocket';
+import { useSocketContext } from '@/contexts/SocketContext';
 import HomeScreen from './screens/HomeScreen';
 import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
 import LanguageSelector from '@/components/LanguageSelector';
@@ -14,7 +14,7 @@ export default function AppPage() {
   const [showOnlineModal, setShowOnlineModal] = useState(false);
 
   // Socket 연결 (온라인 카운트 표시용)
-  const { isConnected, onlineCount, refreshOnlineCount } = useSocket();
+  const { isConnected, onlineCount, refreshOnlineCount } = useSocketContext();
 
   return (
       <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
