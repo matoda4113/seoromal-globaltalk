@@ -5,13 +5,12 @@ import { Room, ChatMessage } from '@/hooks/useSocket';
 import logger from "@/lib/logger";
 import { useAuth } from '@/contexts/AuthContext';
 import { useAgora } from '@/hooks/useAgora';
-import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
-import { useTranslate } from '@/hooks/useTranslate';
 import giftService from '@/services/gift.service';
 import PointsRuleModal from './PointsRuleModal';
 import AudioCallView from './AudioCallView';
 import VideoCallView from './VideoCallView';
 import GiftModal from './GiftModal';
+import ChatMessageList from './ChatMessageList';
 import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
 
 interface RoomModalProps {
@@ -151,7 +150,6 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, messages, on
   const { user } = useAuth();
   const [callDuration, setCallDuration] = useState(0);
   const [messageInput, setMessageInput] = useState('');
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isGiftModalOpen, setIsGiftModalOpen] = useState(false);
   const [selectedGiftAmount, setSelectedGiftAmount] = useState<number | null>(null);
   const [isSendingGift, setIsSendingGift] = useState(false);
@@ -376,99 +374,21 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, messages, on
   // 채팅 토글
   const [isChatVisible, setIsChatVisible] = useState(true);
 
-  // 채팅 탭 (all: 전체, voice: STT만, text: 일반 텍스트만)
-  const [chatTab, setChatTab] = useState<'all' | 'voice' | 'text'>('all');
-
   // 채팅 기록 지우기 (로컬만)
   const [localMessages, setLocalMessages] = useState<typeof messages>([]);
   const [clearedAtIndex, setClearedAtIndex] = useState(-1);
 
-  // 번역 훅
-  const { translateText } = useTranslate();
-
-  // STT 기능 - 자동으로 계속 음성 인식
-  const handleSTTTranscript = useCallback((transcript: string) => {
-    logger.info('📝 STT 텍스트 전송:', transcript);
-    onSendMessage(room.id, transcript, 'stt');
-  }, [room.id, onSendMessage]);
-
-  // STT 언어 설정 (방의 언어에 맞춤)
-  const sttLanguage = room.language === 'ko' ? 'ko-KR' : room.language === 'en' ? 'en-US' : 'ja-JP';
-
-  const { isListening, isSupported, startListening, stopListening } = useSpeechRecognition(
-    handleSTTTranscript,
-    sttLanguage
-  );
-
-  // 모든 사용자 STT 자동 시작 (음소거 상태와 연동)
+  // 메시지 동기화
   useEffect(() => {
-    if (!isSupported) return;
-
-    if (isJoined && !isMuted && !isListening) {
-      // 통화 중이고 음소거가 아닌데 STT가 꺼져있으면 자동 시작
-      logger.log('🎤 STT 자동 시작 (통화 중, 음소거 해제)');
-      const timer = setTimeout(() => {
-        startListening();
-      }, 500); // 약간의 딜레이를 줘서 안정성 확보
-      return () => clearTimeout(timer);
-    } else if ((isMuted || !isJoined) && isListening) {
-      // 음소거하거나 통화 종료되면 STT 중지
-      logger.log('🛑 음소거 또는 통화 종료 → STT 자동 중지');
-      stopListening();
+    if (clearedAtIndex === -1) {
+      // 지우기 전: 모든 메시지 표시
+      setLocalMessages(messages);
+    } else {
+      // 지운 후: 지운 시점 이후의 새 메시지만 표시
+      const newMessages = messages.slice(clearedAtIndex);
+      setLocalMessages(newMessages);
     }
-  }, [isJoined, isMuted, isSupported, isListening, startListening, stopListening]);
-
-  // 번역 캐시 (같은 메시지 중복 번역 방지)
-  const translationCacheRef = useRef<{ [key: string]: string }>({});
-
-  useEffect(() => {
-    const processMessages = async () => {
-      // 모든 STT 메시지를 자동 번역 (캐시 사용)
-      // 유저의 country 언어로 번역 (없으면 브라우저 언어)
-      const userCountry = user?.country?.toLowerCase() || '';
-      const browserLang = typeof window !== 'undefined' ? navigator.language.split('-')[0] : 'en';
-      const targetLang = userCountry || browserLang; // country 우선, 없으면 브라우저 언어
-
-      const translatedMessages = await Promise.all(
-        messages.map(async (msg) => {
-          // 상대방이 보낸 STT 메시지면 번역
-          if (msg.senderId !== user?.userId && msg.type === 'stt') {
-            const cacheKey = `${msg.id}_${targetLang}`;
-
-            // 캐시에 있으면 캐시 사용
-            if (translationCacheRef.current[cacheKey]) {
-              return { ...msg, message: msg.message, translatedMessage: translationCacheRef.current[cacheKey] };
-            }
-
-            // 캐시에 없으면 번역하고 캐시에 저장
-            try {
-              // 유저 country 언어로 번역 (한국어 방 -> 게스트 모국어)
-              // 소스 언어: 방 언어 (호스트가 말하는 언어)
-              const translated = await translateText(msg.message, targetLang, room.language);
-              translationCacheRef.current[cacheKey] = translated;
-              // 원본과 번역을 함께 저장
-              return { ...msg, message: msg.message, translatedMessage: translated };
-            } catch (error) {
-              logger.error('번역 실패, 원본 표시:', error);
-              return msg; // 번역 실패 시 원본 표시
-            }
-          }
-          return msg;
-        })
-      );
-
-      if (clearedAtIndex === -1) {
-        // 지우기 전: 필터링 및 번역된 메시지 표시
-        setLocalMessages(translatedMessages);
-      } else {
-        // 지운 후: 지운 시점 이후의 새 메시지만 표시
-        const newMessages = translatedMessages.slice(clearedAtIndex);
-        setLocalMessages(newMessages);
-      }
-    };
-
-    processMessages();
-  }, [messages, clearedAtIndex, user?.userId, room.language]); // translateText 제거!
+  }, [messages, clearedAtIndex]);
 
   const clearChatHistory = () => {
     const confirm = window.confirm('채팅 기록을 지우시겠습니까? (본인 화면에서만 삭제됩니다)');
@@ -486,10 +406,6 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, messages, on
     }
   };
 
-  // 메시지 추가될 때 스크롤
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
 
   // ref로 최신 값 추적
   const roomRef = useRef(room);
@@ -999,91 +915,14 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, messages, on
           />
         )}
 
-        {/* Chat Messages Overlay (full height) */}
+        {/* Chat Messages Overlay */}
         {isChatVisible && (
-          <div className="absolute top-4 bottom-4 left-4 right-4 overflow-y-auto space-y-2 pointer-events-none z-10">
-            {/* 상단: 탭 + 채팅 지우기 버튼 */}
-            <div className="flex justify-between items-start mb-2 pointer-events-auto">
-              {/* 채팅 탭 (왼쪽) */}
-              <div className="flex gap-1 bg-gray-800/70 backdrop-blur-sm rounded-full p-1">
-                <button
-                  onClick={() => setChatTab('all')}
-                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                    chatTab === 'all' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:text-white'
-                  }`}
-                >
-                  {t.chatTabAll}
-                </button>
-                <button
-                  onClick={() => setChatTab('voice')}
-                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                    chatTab === 'voice' ? 'bg-purple-600 text-white' : 'text-gray-300 hover:text-white'
-                  }`}
-                >
-                  🎤 {t.chatTabVoice}
-                </button>
-                <button
-                  onClick={() => setChatTab('text')}
-                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                    chatTab === 'text' ? 'bg-green-600 text-white' : 'text-gray-300 hover:text-white'
-                  }`}
-                >
-                  💬 {t.chatTabText}
-                </button>
-              </div>
-
-              {/* 채팅 지우기 버튼 (오른쪽) */}
-              {localMessages.length > 0 && (
-                <button
-                  onClick={clearChatHistory}
-                  className="bg-gray-800/70 hover:bg-gray-700/70 text-gray-300 text-xs px-3 py-1 rounded-full backdrop-blur-sm transition-colors"
-                >
-                  🗑️ 채팅 기록 지우기
-                </button>
-              )}
-            </div>
-
-            {localMessages
-              .filter((msg) => {
-                if (chatTab === 'all') return true;
-                if (chatTab === 'voice') return msg.type === 'stt';
-                if (chatTab === 'text') return msg.type !== 'stt';
-                return true;
-              })
-              .map((msg) => {
-              const isMyMessage = msg.senderId === user?.userId;
-              const isSTT = msg.type === 'stt';
-
-              // 디버깅을 위한 로그
-              logger.info(`💬 Message: senderId=${msg.senderId}, userId=${user?.userId}, isMyMessage=${isMyMessage}, type=${msg.type}`);
-
-              return (
-                <div
-                  key={msg.id}
-                  className={`flex ${isMyMessage ? 'justify-end' : 'justify-start'} pointer-events-auto`}
-                >
-                  {/* STT 메시지: 보라색 글자 + 아이콘, 배경색은 발신자에 따라 다름 */}
-                  {isSTT ? (
-                    <div className={`max-w-xs ${isMyMessage ? 'bg-blue-600/90' : 'bg-gray-800/90'} backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg`}>
-                      <p className="text-sm flex items-center gap-1" style={{ color: '#c084fc' }}>
-                        <span>🎤</span>
-                        <span>{msg.message}</span>
-                      </p>
-                      {/* 번역된 메시지 (있으면 표시) */}
-                      {(msg as any).translatedMessage && (msg as any).translatedMessage !== msg.message && (
-                        <p className="text-white/80 text-xs mt-1 ml-6">{(msg as any).translatedMessage}</p>
-                      )}
-                    </div>
-                  ) : (
-                    <div className={`max-w-xs ${isMyMessage ? 'bg-blue-600/90' : 'bg-gray-800/90'} backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg`}>
-                      <p className="text-white text-sm">{msg.message}</p>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-            <div ref={messagesEndRef} />
-          </div>
+          <ChatMessageList
+            messages={localMessages}
+            currentUserId={user?.userId}
+            onClearHistory={clearChatHistory}
+            t={t}
+          />
         )}
       </div>
 
