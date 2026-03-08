@@ -1054,14 +1054,17 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, messages, on
               const isMyMessage = msg.senderId === user?.userId;
               const isSTT = msg.type === 'stt';
 
+              // 디버깅을 위한 로그
+              logger.info(`💬 Message: senderId=${msg.senderId}, userId=${user?.userId}, isMyMessage=${isMyMessage}, type=${msg.type}`);
+
               return (
                 <div
                   key={msg.id}
                   className={`flex ${isMyMessage ? 'justify-end' : 'justify-start'} pointer-events-auto`}
                 >
-                  {/* STT 메시지: 보라색 글자 + 아이콘, 일반 메시지: 흰색 글자 */}
+                  {/* STT 메시지: 보라색 글자 + 아이콘, 배경색은 발신자에 따라 다름 */}
                   {isSTT ? (
-                    <div className="max-w-xs bg-gray-800/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg">
+                    <div className={`max-w-xs ${isMyMessage ? 'bg-blue-600/90' : 'bg-gray-800/90'} backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg`}>
                       <p className="text-sm flex items-center gap-1" style={{ color: '#c084fc' }}>
                         <span>🎤</span>
                         <span>{msg.message}</span>

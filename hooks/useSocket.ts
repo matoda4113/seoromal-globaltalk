@@ -68,13 +68,7 @@ export function useSocket() {
 
 
     const socket = getSocket();
-    if (socket.connected) {
-      setIsConnected(true);
-      socket.emit('getOnlineCount', { page:1, limit:1 });
-      socket.emit('getRooms');
 
-
-    }
     const handleConnect = () => {
       logger.info('✅ Socket connected:', socket.id);
       setIsConnected(true);
