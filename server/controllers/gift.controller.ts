@@ -12,9 +12,7 @@ export async function sendGift(req: Request, res: Response) {
   try {
     const { recipientUserId, amount } = req.body;
     const senderUserId = (req as any).userId;
-    console.log(recipientUserId);
-    console.log(amount);
-    console.log(senderUserId);
+
     // 필수 파라미터 검증
     if (!recipientUserId || !amount || !senderUserId) {
       return res.status(400).json({ error: '필수 파라미터가 누락되었습니다.' });
@@ -64,10 +62,17 @@ export async function sendGift(req: Request, res: Response) {
         message: '선물이 전송되었습니다.',
         newBalance: newSenderBalance,
       });
-    } catch (error) {
+    } catch (error: any) {
+      // 잔액 부족 에러는 400 (Bad Request)
+      if (error.message && error.message.includes('포인트가 부족합니다')) {
+        loggerBack.warn(`⚠️ 잔액 부족 - userId: ${senderUserId}, amount: ${amount}`);
+        return res.status(400).json({ error: error.message });
+      }
+
+      // 그 외 에러는 500 (Server Error)
       throw error;
     }
-  } catch (error) {
+  } catch (error: any) {
     loggerBack.error('❌ 선물 전송 에러:', error);
     return res.status(500).json({ error: '선물 전송 중 오류가 발생했습니다.' });
   }

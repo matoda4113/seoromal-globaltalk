@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { Room, ChatMessage } from '@/hooks/useSocket';
+import { getSocket } from '@/lib/socket';
 import logger from "@/lib/logger";
 import { useAuth } from '@/contexts/AuthContext';
 import { useAgora } from '@/hooks/useAgora';
@@ -63,6 +64,13 @@ const translations = {
     editTitle: '제목 수정',
     saveTitle: '저장',
     cancelEdit: '취소',
+    networkDisconnected: '네트워크 연결 끊김',
+    networkDisconnectedMessage: '네트워크 연결이 끊어졌습니다.\n페이지를 새로고침합니다.',
+    messagePlaceholder: '메시지 입력...',
+    send: '전송',
+    inCall: '통화 중',
+    waitingForGuest: '게스트 대기 중...',
+    connecting: '연결 중...',
   },
   en: {
     leave: 'Leave',
@@ -101,6 +109,13 @@ const translations = {
     editTitle: 'Edit Title',
     saveTitle: 'Save',
     cancelEdit: 'Cancel',
+    networkDisconnected: 'Network Disconnected',
+    networkDisconnectedMessage: 'Network connection lost.\nRefreshing the page.',
+    messagePlaceholder: 'Type a message...',
+    send: 'Send',
+    inCall: 'In Call',
+    waitingForGuest: 'Waiting for guest...',
+    connecting: 'Connecting...',
   },
   ja: {
     leave: '退出',
@@ -139,6 +154,13 @@ const translations = {
     editTitle: 'タイトル編集',
     saveTitle: '保存',
     cancelEdit: 'キャンセル',
+    networkDisconnected: 'ネットワーク接続切断',
+    networkDisconnectedMessage: 'ネットワーク接続が切断されました。\nページを更新します。',
+    messagePlaceholder: 'メッセージを入力...',
+    send: '送信',
+    inCall: '通話中',
+    waitingForGuest: 'ゲスト待機中...',
+    connecting: '接続中...',
   },
 };
 
@@ -155,6 +177,7 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, messages, on
   const [isSendingGift, setIsSendingGift] = useState(false);
   const [confirmModalData, setConfirmModalData] = useState<{ message: string; warning?: string } | null>(null);
   const [isPointsRuleModalOpen, setIsPointsRuleModalOpen] = useState(false);
+  const [showDisconnectModal, setShowDisconnectModal] = useState(false);
 
   // 현재 사용자가 게스트인지 확인
   const isGuest = user?.userId !== room.hostId;
@@ -493,6 +516,24 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, messages, on
     };
   }, [isJoined, client]);
 
+  // Socket 연결 끊김 감지
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const socket = getSocket();
+
+    const handleSocketDisconnect = () => {
+      logger.log('🔌 Socket disconnected - network issue');
+      setShowDisconnectModal(true);
+    };
+
+    socket.on('disconnect', handleSocketDisconnect);
+
+    return () => {
+      socket.off('disconnect', handleSocketDisconnect);
+    };
+  }, [isOpen]);
+
   // 화면 공유 토글
   const toggleScreenShare = useCallback(async () => {
     if (!client || !isJoined) {
@@ -797,6 +838,7 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, messages, on
           <span>{t.leave}</span>
         </button>
         <div className="flex flex-col items-center flex-1 mx-4">
+
           {/* Room Title */}
           {isEditingTitle && !isGuest ? (
             <div className="flex items-center gap-2">
@@ -845,11 +887,11 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, messages, on
             const participantCount = room.participants.length;
 
             if (isJoined) {
-              return <p className="text-green-400 text-xs mt-1">🎤 통화 중</p>;
+              return <p className="text-green-400 text-xs mt-1">🎤 {t.inCall}</p>;
             } else if (isHost && participantCount === 1) {
-              return <p className="text-yellow-400 text-xs mt-1">⏳ 게스트 대기 중...</p>;
+              return <p className="text-yellow-400 text-xs mt-1">⏳ {t.waitingForGuest}</p>;
             } else if (participantCount >= 2) {
-              return <p className="text-blue-400 text-xs mt-1 animate-pulse">🔄 연결 중...</p>;
+              return <p className="text-blue-400 text-xs mt-1 animate-pulse">🔄 {t.connecting}</p>;
             }
             return null;
           })()}
@@ -937,7 +979,7 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, messages, on
                 value={messageInput}
                 onChange={(e) => setMessageInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                placeholder="메시지 입력..."
+                placeholder={t.messagePlaceholder}
                 className="flex-1 bg-gray-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <button
@@ -945,7 +987,7 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, messages, on
                 disabled={!messageInput.trim()}
                 className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
               >
-                전송
+                {t.send}
               </button>
             </div>
           </div>
@@ -1097,6 +1139,31 @@ export default function RoomModal({ isOpen, onClose, onLeave, room, messages, on
         onClose={() => setIsPointsRuleModalOpen(false)}
         roomType={room.callType}
       />
+
+      {/* 네트워크 연결 끊김 모달 */}
+      {showDisconnectModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+            <div className="mb-4 text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-3">
+                <span className="text-4xl">🔌</span>
+              </div>
+              <h3 className="text-lg font-bold text-red-600">{t.networkDisconnected}</h3>
+            </div>
+
+            <p className="text-base text-gray-800 text-center mb-6 font-medium whitespace-pre-line">
+              {t.networkDisconnectedMessage}
+            </p>
+
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors"
+            >
+              {t.confirm}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

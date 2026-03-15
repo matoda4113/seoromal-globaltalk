@@ -66,7 +66,6 @@ export function useSocket() {
   useEffect(() => {
 
 
-
     const socket = getSocket();
 
     const handleConnect = () => {
@@ -103,9 +102,9 @@ export function useSocket() {
       setRooms((prev) =>
         prev.map((room) => (room.id === updatedRoom.id ? updatedRoom : room))
       );
-      if (currentRoom?.id === updatedRoom.id) {
+      // if (currentRoom?.id === updatedRoom.id) {
         setCurrentRoom(updatedRoom);
-      }
+      // }
     };
 
     const handleRoomListUpdated = (room: Room) => {
@@ -252,7 +251,7 @@ export function useSocket() {
       socket.off('pointsUpdated', handlePointsUpdated);
       socket.off('giftReceived', handleGiftReceived);
     };
-  }, [currentRoom]);
+  }, []);
 
 
   const joinRoom = (roomId: string, nickname?: string, password?: string) => {

@@ -47,6 +47,8 @@ app.prepare().then(() => {
       methods: ['GET', 'POST'],
       credentials: true,
     },
+    pingInterval: 5000,  // 10초마다 ping
+    pingTimeout: 3000,    // 5초 응답 없으면 끊김으로 판단
   });
 
   // Express middleware

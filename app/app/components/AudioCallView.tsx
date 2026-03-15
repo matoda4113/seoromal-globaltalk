@@ -8,14 +8,17 @@ const translations = {
   ko: {
     host: 'Host',
     guest: 'Guest',
+    waitingForOther: '상대방을 기다리는 중...',
   },
   en: {
     host: 'Host',
     guest: 'Guest',
+    waitingForOther: 'Waiting for the other person...',
   },
   ja: {
     host: 'Host',
     guest: 'Guest',
+    waitingForOther: '相手を待っています...',
   },
 };
 
@@ -40,49 +43,57 @@ export default function AudioCallView({
   const { currentLanguage } = useGlobalSettings();
   const t = translations[currentLanguage];
 
-  return (
-    <div className="w-full px-8">
-      <div className="flex flex-col items-center gap-6">
-          {/* 참가자 프로필 */}
-          <div className="flex justify-center items-center gap-[30px] max-w-4xl mx-auto">
-            {room.participants.map((participant) => {
-              // 현재 참가자가 말하고 있는지 확인 (임계값: 0.1 이상)
-              const isMe = participant.userId === user?.userId;
-              const VOLUME_THRESHOLD = 0.1; // 백그라운드 노이즈 필터링
-              const isSpeaking = isMe ? (localVolume > VOLUME_THRESHOLD) : (remoteVolume > VOLUME_THRESHOLD);
+  // 상대방 찾기 (나를 제외한 참가자)
+  const otherParticipant = room.participants.find(p => p.userId !== user?.userId);
+  const VOLUME_THRESHOLD = 0.1; // 백그라운드 노이즈 필터링
+  const isSpeaking = remoteVolume > VOLUME_THRESHOLD;
 
-              return (
-                <div key={participant.socketId} className="text-center">
-                  <div className="relative">
-                    {/* 말하는 중일 때 애니메이션 링 */}
-                    {isSpeaking && (
-                      <>
-                        <div className="absolute inset-0 w-20 h-20 rounded-full bg-green-500 opacity-30 animate-ping"></div>
-                        <div className="absolute inset-0 w-20 h-20 rounded-full border-4 border-green-400 animate-pulse"></div>
-                      </>
+  return (
+    <div className="w-full h-full flex items-center justify-center">
+      <div className="flex flex-col items-center gap-6">
+          {/* 참가자 프로필 - 상대방만 표시 */}
+          <div className="flex justify-center items-center">
+            {otherParticipant ? (
+              <div className="text-center">
+                <div className="relative w-32 h-32 mx-auto mb-4">
+                  {/* 말하는 중일 때 애니메이션 링 */}
+                  {isSpeaking && (
+                    <>
+                      <div className="absolute inset-0 w-32 h-32 rounded-full bg-green-500 opacity-30 animate-ping"></div>
+                      <div className="absolute inset-0 w-32 h-32 rounded-full border-4 border-green-400 animate-pulse"></div>
+                    </>
+                  )}
+                  {/* 프로필 이미지 */}
+                  <div className={`w-32 h-32 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white text-4xl font-bold overflow-hidden ${
+                    isSpeaking ? 'ring-4 ring-green-400 shadow-lg shadow-green-500/50' : ''
+                  }`}>
+                    {otherParticipant.profileImageUrl ? (
+                      <img
+                        src={otherParticipant.profileImageUrl}
+                        alt={otherParticipant.nickname}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      otherParticipant.nickname[0].toUpperCase()
                     )}
-                    {/* 프로필 이미지 */}
-                    <div className={`w-20 h-20 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white text-2xl font-bold mb-3 overflow-hidden relative ${
-                      isSpeaking ? 'ring-4 ring-green-400 shadow-lg shadow-green-500/50' : ''
-                    }`}>
-                      {participant.profileImageUrl ? (
-                        <img
-                          src={participant.profileImageUrl}
-                          alt={participant.nickname}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        participant.nickname[0].toUpperCase()
-                      )}
-                    </div>
                   </div>
-                  <p className="text-white text-lg font-semibold mb-1">{participant.nickname}</p>
-                  <span className={`inline-block ${participant.isHost ? 'bg-yellow-500' : 'bg-gray-600'} text-white px-2 py-1 rounded text-xs`}>
-                    {participant.isHost ? t.host : t.guest}
-                  </span>
                 </div>
-              );
-            })}
+                <p className="text-white text-xl font-semibold mb-2">{otherParticipant.nickname}</p>
+                <span className={`inline-block ${otherParticipant.isHost ? 'bg-yellow-500' : 'bg-gray-600'} text-white px-3 py-1 rounded text-sm`}>
+                  {otherParticipant.isHost ? t.host : t.guest}
+                </span>
+              </div>
+            ) : (
+              // 대기중 화면
+              <div className="text-center">
+                <div className="w-32 h-32 mx-auto bg-gradient-to-br from-gray-500 to-gray-700 rounded-full flex items-center justify-center text-white text-4xl font-bold mb-4">
+                  <svg className="w-16 h-16 text-white animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                </div>
+                <p className="text-white text-xl animate-pulse">{t.waitingForOther}</p>
+              </div>
+            )}
           </div>
 
           {/* 마이크 선택 (PC only) */}
